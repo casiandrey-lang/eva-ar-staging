@@ -4,6 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>EVA P0.4 — WebXR control</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/"
+    }
+  }
+  </script>
   <style>
     html,body{margin:0;height:100%;overflow:hidden;background:#111;color:#fff;font-family:system-ui,Segoe UI,Arial,sans-serif}
     #app{position:fixed;inset:0}
@@ -12,6 +20,7 @@
     #top strong{display:block;font-size:16px}.muted{font-size:11px;color:#bbb;margin-top:2px}
     #status{margin-top:6px;font-size:12px;color:#d8d8d8}
     #start{margin-top:8px;border:0;border-radius:10px;padding:12px 16px;font-weight:750;background:#fff;color:#111}
+    #start:disabled{opacity:.45}
     #controls{position:fixed;left:50%;bottom:max(10px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;width:min(96%,760px);display:none;gap:6px;padding:8px;border-radius:14px;background:#111e;backdrop-filter:blur(8px)}
     #controls.active{display:grid}
     .row{display:flex;flex-wrap:wrap;gap:5px;justify-content:center}
@@ -22,14 +31,24 @@
     #hint{font-size:10px;color:#bbb;text-align:center;line-height:1.25}
     #wallInfo{font-size:11px;color:#ddd;text-align:center}
   </style>
+  <script>
+    window.addEventListener('error', function(e) {
+      var s=document.getElementById('status');
+      if(s) s.textContent='Eroare startup: '+(e.message||'necunoscută');
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      var s=document.getElementById('status');
+      if(s) s.textContent='Eroare async: '+(e.reason && (e.reason.message||e.reason) || 'necunoscută');
+    });
+  </script>
 </head>
 <body>
 <div id="app"></div>
 <div id="top">
-  <strong>EVA P0.4 — WebXR control direct</strong>
+  <strong>EVA P0.4.1 — WebXR control direct</strong>
   <div class="muted">Test 1:1. Peretele se definește prin două puncte la baza lui.</div>
-  <div id="status">Verificare WebXR…</div>
-  <button id="start">Pornește WebXR P0.4</button>
+  <div id="status">Pornire modul P0.4.1…</div>
+  <button id="start" disabled>Pornește WebXR P0.4.1</button>
 </div>
 <div id="controls">
   <div class="row">
@@ -47,8 +66,8 @@
   <div id="hint">Reașază: apasă butonul, apoi atinge pardoseala. Perete: apasă „Definește peretele”, apoi atinge două puncte la baza peretelui.</div>
 </div>
 <script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/loaders/GLTFLoader.js';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const app=document.getElementById('app');
 const status=document.getElementById('status');
@@ -90,15 +109,20 @@ function initScene(){
     model.visible=false;
     model.rotation.order='YXZ';
     scene.add(model);
-    setStatus('Model încărcat. Pornește WebXR și atinge pardoseala pentru plasare.');
+    setStatus('Model încărcat. Verific WebXR…');
   },undefined,e=>setStatus('Eroare GLB: '+(e?.message||e)));
 }
 
 async function checkXR(){
-  if(!navigator.xr){setStatus('navigator.xr: NU');start.disabled=true;return;}
-  const ok=await navigator.xr.isSessionSupported('immersive-ar');
-  setStatus('immersive-ar: '+(ok?'DA':'NU'));
-  start.disabled=!ok;
+  try{
+    if(!navigator.xr){setStatus('navigator.xr: NU');start.disabled=true;return;}
+    const ok=await navigator.xr.isSessionSupported('immersive-ar');
+    setStatus('WebXR immersive-ar: '+(ok?'DA — gata de pornire':'NU'));
+    start.disabled=!ok;
+  }catch(e){
+    setStatus('Eroare verificare WebXR: '+(e?.message||e));
+    start.disabled=true;
+  }
 }
 
 function applyYaw(next){
@@ -150,19 +174,19 @@ function snapToWall(){
   const dx=b.x-a.x,dz=b.z-a.z;
   const len=Math.hypot(dx,dz); if(!len)return;
   const ux=dx/len, uz=dz/len;
-  // Three.js local +X after Y rotation is (cos(yaw), 0, -sin(yaw)).
   const targetYaw=Math.atan2(-uz,ux);
   applyYaw(targetYaw);
   const mx=(a.x+b.x)/2, mz=(a.z+b.z)/2;
-  // Model origin is rear-left. Move it half-width back along wall so rear edge is centered on selected wall segment.
   model.position.x=mx-ux*(WIDTH/2);
   model.position.z=mz-uz*(WIDTH/2);
   model.position.y=(a.y+b.y)/2;
   model.visible=true;
-  setStatus('Wall Snap aplicat: bara SPATE este pe linia definită a peretelui. Dacă proiecția este pe partea greșită, apasă Față / Spate.');
+  setStatus('Wall Snap aplicat. Dacă proiecția este pe partea greșită, apasă Față / Spate.');
 }
 
 async function startXR(){
+  start.disabled=true;
+  setStatus('Se solicită sesiunea WebXR…');
   try{
     session=await navigator.xr.requestSession('immersive-ar',{
       requiredFeatures:['hit-test','local-floor'],
@@ -175,26 +199,38 @@ async function startXR(){
     viewerSpace=await session.requestReferenceSpace('viewer');
     hitTestSource=await session.requestHitTestSource({space:viewerSpace});
     session.addEventListener('select',onSelect);
-    session.addEventListener('end',()=>{controls.classList.remove('active');start.style.display='inline-block';setStatus('Sesiune WebXR închisă.');});
+    session.addEventListener('end',()=>{
+      controls.classList.remove('active');
+      start.style.display='inline-block';
+      start.disabled=false;
+      setStatus('Sesiune WebXR închisă.');
+    });
     controls.classList.add('active');
     start.style.display='none';
     mode=model?.visible?'idle':'place';
     const overlay=session.domOverlayState?.type||'indisponibil';
     setStatus('WebXR pornit. DOM overlay: '+overlay+'. '+(mode==='place'?'Atinge pardoseala pentru plasare.':'Model activ.'));
     renderer.setAnimationLoop(render);
-  }catch(e){setStatus('WebXR start eșuat: '+(e?.message||e));}
+  }catch(e){
+    setStatus('WebXR start eșuat: '+(e?.name||'Error')+' — '+(e?.message||e));
+    start.disabled=false;
+  }
 }
 
 function render(_t,frame){
   if(frame&&hitTestSource&&refSpace){
     const hits=frame.getHitTestResults(hitTestSource);
-    if(hits.length){const pose=hits[0].getPose(refSpace);reticle.visible=true;reticle.matrix.fromArray(pose.transform.matrix);}else reticle.visible=false;
+    if(hits.length){
+      const pose=hits[0].getPose(refSpace);
+      reticle.visible=true;
+      reticle.matrix.fromArray(pose.transform.matrix);
+    }else reticle.visible=false;
   }
   renderer.render(scene,camera);
 }
 
 start.addEventListener('click',startXR);
-document.getElementById('horizon').addEventListener('click',()=>{if(model){model.rotation.x=0;model.rotation.z=0;model.position.y=Math.max(model.position.y,0);setStatus('Orizont aplicat: stâlpi verticali, stofă sus.');}});
+document.getElementById('horizon').addEventListener('click',()=>{if(model){model.rotation.x=0;model.rotation.z=0;setStatus('Orizont aplicat: stâlpi verticali, stofă sus.');}});
 document.getElementById('flip').addEventListener('click',()=>{applyYaw(yaw+Math.PI);setStatus('Față / Spate inversat 180°.');});
 document.getElementById('left').addEventListener('click',()=>applyYaw(yaw+THREE.MathUtils.degToRad(15)));
 document.getElementById('right').addEventListener('click',()=>applyYaw(yaw-THREE.MathUtils.degToRad(15)));
@@ -203,7 +239,9 @@ document.getElementById('defineWall').addEventListener('click',()=>{wallPoints=[
 snapWall.addEventListener('click',snapToWall);
 
 addEventListener('resize',()=>{if(renderer)renderer.setSize(innerWidth,innerHeight);});
-initScene();checkXR();
+setStatus('Module Three.js încărcate. Inițializare scenă…');
+initScene();
+checkXR();
 </script>
 </body>
 </html>
