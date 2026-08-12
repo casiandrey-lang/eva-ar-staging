@@ -3,32 +3,39 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>EVA AR P0.2</title>
+  <title>EVA AR P0.3</title>
   <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.3.1/model-viewer.min.js"></script>
   <style>
     html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Arial,sans-serif;background:#111;color:#fff}
     main{height:100%;display:grid;grid-template-rows:auto auto 1fr auto}
-    header,footer{padding:10px 14px;background:#171717}
+    header,footer{padding:9px 13px;background:#171717}
     header strong{display:block}.muted{font-size:12px;color:#bbb;margin-top:3px}
-    #status{padding:7px 14px;background:#252525;color:#ddd;font-size:12px}
+    #status{padding:7px 13px;background:#252525;color:#ddd;font-size:12px}
     .viewer-wrap{position:relative;min-height:0;background:#eee;overflow:hidden}
     model-viewer{width:100%;height:100%;background:#eee;--poster-color:#eee}
-    .toolbar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:10;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:min(94%,760px);padding:8px;border-radius:12px;background:#111d;backdrop-filter:blur(8px)}
-    .toolbar button{border:1px solid #ffffff33;border-radius:8px;padding:9px 11px;background:#222;color:#fff;font:600 13px/1 system-ui;cursor:pointer}
+    .toolbar{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:10;display:grid;gap:6px;width:min(95%,820px);padding:8px;border-radius:12px;background:#111e;backdrop-filter:blur(8px)}
+    .row{display:flex;flex-wrap:wrap;gap:5px;align-items:center;justify-content:center}
+    .toolbar button{border:1px solid #ffffff33;border-radius:8px;padding:9px 10px;background:#222;color:#fff;font:600 12px/1 system-ui;cursor:pointer}
     .toolbar button:active{transform:translateY(1px)}
     .toolbar .primary{background:#fff;color:#111}
-    .angle{min-width:62px;text-align:center;align-self:center;font-size:12px;color:#ddd}
+    .toolbar .wall-selected{outline:2px solid #fff;outline-offset:1px}
+    .angle{min-width:58px;text-align:center;font-size:12px;color:#ddd}
+    .label{font-size:11px;color:#bbb;margin-right:2px}
+    .note{font-size:10px;color:#bbb;text-align:center;line-height:1.25}
     .ar-button{border:0;border-radius:10px;padding:12px 18px;font-weight:700;background:#111;color:#fff;box-shadow:0 1px 6px #0005}
     .hotspot{border:0;border-radius:999px;padding:6px 9px;background:#111e;color:#fff;font:700 11px/1 system-ui;box-shadow:0 1px 5px #0007;pointer-events:none}
-    footer{font-size:12px;color:#bbb}
-    @media (max-width:600px){.toolbar{bottom:8px;gap:5px;padding:6px}.toolbar button{padding:9px 8px;font-size:12px}.hide-mobile{display:none}}
+    footer{font-size:11px;color:#bbb}
+    @media (max-width:600px){
+      header{padding:7px 10px}.muted{display:none}#status{padding:6px 10px}
+      .toolbar{bottom:6px;gap:5px;padding:6px;width:96%}.toolbar button{padding:8px 7px;font-size:11px}.note{font-size:9px}
+    }
   </style>
 </head>
 <body>
 <main>
 <header>
-  <strong>EVA AR P0.2 — 8500 × 5000 mm</strong>
-  <div class="muted">Control minim de orientare. „SPATE” indică bara posterioară / latura spre perete.</div>
+  <strong>EVA AR P0.3 — Upright + Wall Snap test</strong>
+  <div class="muted">Model P0 simplificat 8500 × 5000 mm. GLB sursă corectat Y-up: stâlpi verticali, stofă sus.</div>
 </header>
 <div id="status">Inițializare viewer 3D…</div>
 <div class="viewer-wrap">
@@ -46,28 +53,37 @@
     ar-scale="fixed"
     ar-placement="floor">
     <button slot="ar-button" class="ar-button">Vezi pergola în spațiul tău</button>
-    <button class="hotspot" slot="hotspot-back" data-position="4.25m 0.08m 2.92m" data-normal="0m -1m 0m">SPATE</button>
+    <button class="hotspot" slot="hotspot-back" data-position="4.25m 2.66m 0.02m" data-normal="0m 0m -1m">SPATE → PERETE</button>
   </model-viewer>
 
-  <div class="toolbar" aria-label="Controale orientare EVA">
-    <button id="rotLeft" title="Rotire 15 grade spre stânga">↶ 15°</button>
-    <button id="rotRight" title="Rotire 15 grade spre dreapta">15° ↷</button>
-    <span id="angle" class="angle">0°</span>
-    <button class="snap hide-mobile" data-angle="0">0°</button>
-    <button class="snap" data-angle="90">90°</button>
-    <button class="snap hide-mobile" data-angle="180">180°</button>
-    <button class="snap" data-angle="270">270°</button>
-    <button id="reset">Reset</button>
-    <button id="recenter" class="primary">Re-centrare</button>
+  <div class="toolbar" aria-label="Controale P0.3 EVA">
+    <div class="row">
+      <button id="horizon" class="primary">Orizont</button>
+      <button id="flip">Față / Spate</button>
+      <button id="rotLeft">↶ 15°</button>
+      <span id="angle" class="angle">0°</span>
+      <button id="rotRight">15° ↷</button>
+      <button id="recenter">Reașază</button>
+    </div>
+    <div class="row" id="wallRow">
+      <span class="label">Direcție perete:</span>
+      <button class="wall wall-selected" data-wall="0">0°</button>
+      <button class="wall" data-wall="90">90°</button>
+      <button class="wall" data-wall="180">180°</button>
+      <button class="wall" data-wall="270">270°</button>
+      <button id="wallSnap" class="primary">Lipește de perete</button>
+    </div>
+    <div class="note">P0.3: „Lipește” aliniază SPATELE paralel cu direcția de perete selectată. Contactul fizic cu peretele se face încă prin deplasare manuală; detecția planului vertical va fi testată separat în WebXR.</div>
   </div>
 </div>
-<footer>Scară nominală 1:1. În WebXR orientarea poate fi ajustată și în sesiunea AR; Scene Viewer folosește controalele native pentru repoziționare.</footer>
+<footer>Scară nominală 1:1. WebXR păstrează controalele din pagină; Scene Viewer folosește modelul GLB original și gesturile native Android.</footer>
 </main>
 <script type="module">
   const status = document.getElementById('status');
   const viewer = document.getElementById('eva');
   const angleLabel = document.getElementById('angle');
   let yaw = 0;
+  let wallYaw = 0;
 
   const normalize = value => ((value % 360) + 360) % 360;
 
@@ -78,44 +94,61 @@
     if (reframe && viewer.loaded) viewer.updateFraming();
   };
 
+  const setUpright = () => {
+    applyOrientation(yaw, true);
+    status.textContent = `Orizont aplicat: stâlpi verticali, stofă sus, yaw ${yaw}°.`;
+  };
+
+  document.getElementById('horizon').addEventListener('click', setUpright);
+  document.getElementById('flip').addEventListener('click', () => {
+    applyOrientation(yaw + 180, true);
+    status.textContent = 'Față / Spate inversat cu 180°.';
+  });
   document.getElementById('rotLeft').addEventListener('click', () => applyOrientation(yaw - 15));
   document.getElementById('rotRight').addEventListener('click', () => applyOrientation(yaw + 15));
-  document.querySelectorAll('.snap').forEach(button => {
-    button.addEventListener('click', () => applyOrientation(Number(button.dataset.angle), true));
+
+  document.querySelectorAll('.wall').forEach(button => {
+    button.addEventListener('click', () => {
+      wallYaw = Number(button.dataset.wall);
+      document.querySelectorAll('.wall').forEach(b => b.classList.toggle('wall-selected', b === button));
+      status.textContent = `Direcție perete selectată: ${wallYaw}°. Apasă „Lipește de perete”.`;
+    });
   });
 
-  document.getElementById('reset').addEventListener('click', () => {
-    applyOrientation(0, true);
-    viewer.resetTurntableRotation(0);
-    viewer.cameraOrbit = 'auto auto auto';
-    viewer.cameraTarget = 'auto auto auto';
-    viewer.jumpCameraToGoal();
+  document.getElementById('wallSnap').addEventListener('click', () => {
+    applyOrientation(wallYaw, true);
+    status.textContent = `Wall Snap test: SPATE aliniat la perete ${wallYaw}°. Deplasează modelul până atinge fizic peretele.`;
   });
 
   document.getElementById('recenter').addEventListener('click', () => {
     viewer.updateFraming();
+    viewer.resetTurntableRotation(0);
     viewer.cameraOrbit = 'auto auto auto';
     viewer.cameraTarget = 'auto auto auto';
     viewer.jumpCameraToGoal();
-    status.textContent = 'Model re-centrat. În AR, mută modelul cu gestul nativ al telefonului.';
+    status.textContent = 'Model re-așezat în viewer. În AR, repoziționarea fizică se face prin gestul de deplasare.';
   });
 
   customElements.whenDefined('model-viewer').then(() => {
     status.textContent = 'Viewer 3D încărcat. Se încarcă modelul…';
   });
+
   viewer.addEventListener('load', () => {
-    status.textContent = 'Model GLB încărcat. Folosește butoanele pentru orientare, apoi intră în AR.';
     applyOrientation(0);
+    status.textContent = 'Model gata. Verifică Orizont, apoi intră în AR.';
   });
-  viewer.addEventListener('error', (event) => {
-    status.textContent = `Eroare la încărcarea modelului: ${event.detail?.type || 'necunoscută'}`;
+
+  viewer.addEventListener('error', event => {
+    status.textContent = `Eroare model: ${event.detail?.type || 'necunoscută'}`;
   });
+
   viewer.addEventListener('ar-status', event => {
     const s = event.detail?.status;
-    if (s === 'session-started') status.textContent = 'AR pornit. Caută pardoseala și plasează pergola.';
-    if (s === 'object-placed') status.textContent = 'Pergola este plasată. Rotirea P0.2 rămâne disponibilă în WebXR.';
-    if (s === 'failed') status.textContent = 'AR nu a putut porni pe acest dispozitiv / mod.';
+    if (s === 'session-started') status.textContent = 'WebXR pornit: caută pardoseala. Controalele P0.3 rămân disponibile.';
+    if (s === 'object-placed') status.textContent = 'WebXR: model plasat. Poți folosi Orizont / Wall Snap.';
+    if (s === 'failed') status.textContent = 'WebXR nu a pornit; se poate folosi fallback Scene Viewer dacă este disponibil.';
   });
+
   setTimeout(() => {
     if (!customElements.get('model-viewer')) status.textContent = 'Eroare: biblioteca model-viewer nu s-a încărcat.';
   }, 8000);
