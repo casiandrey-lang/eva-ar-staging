@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>EVA WebXR Wall Snap P0.4</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/"
+    }
+  }
+  </script>
+  <style>
+    :root{font-family:system-ui,Segoe UI,Arial,sans-serif;color:#fff;background:#111}
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;overflow:hidden}
+    body{background:#111}
+    #stage{position:fixed;inset:0;background:#e9e9e9}
+    #stage canvas{width:100%;height:100%;display:block}
+    #hud{position:fixed;inset:0;z-index:10;pointer-events:none}
+    #top{pointer-events:auto;position:absolute;top:0;left:0;right:0;padding:12px 14px;background:#151515e8;backdrop-filter:blur(8px)}
+    #top strong{display:block;font-size:16px}
+    #diag{font-size:12px;color:#bbb;margin-top:4px;line-height:1.35}
+    #status{margin-top:7px;padding:7px 9px;border-radius:8px;background:#262626;font-size:12px;line-height:1.3}
+    #start{pointer-events:auto;position:absolute;left:14px;top:116px;border:0;border-radius:12px;padding:13px 18px;font-weight:750;background:#111;color:#fff;box-shadow:0 2px 8px #0005}
+    #crosshair{display:none;position:absolute;left:50%;top:50%;width:28px;height:28px;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #0008}
+    #crosshair:before,#crosshair:after{content:"";position:absolute;background:#fff}
+    #crosshair:before{width:10px;height:2px;left:7px;top:11px}
+    #crosshair:after{width:2px;height:10px;left:11px;top:7px}
+    #surface{display:none;position:absolute;left:50%;top:calc(50% + 22px);transform:translateX(-50%);padding:4px 7px;border-radius:7px;background:#111d;font-size:11px;white-space:nowrap}
+    #controls{display:none;pointer-events:auto;position:absolute;left:50%;bottom:max(8px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(96%,760px);padding:8px;border-radius:14px;background:#111e;backdrop-filter:blur(10px);gap:6px}
+    .row{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:4px 0}
+    button.ctrl{border:1px solid #ffffff35;border-radius:9px;background:#242424;color:#fff;padding:10px 11px;font-weight:700;font-size:12px}
+    button.ctrl.primary{background:#fff;color:#111}
+    button.ctrl.warn{background:#3a2d10}
+    #hint{font-size:10px;color:#bbb;text-align:center;line-height:1.3;padding-top:3px}
+    body.xr-active #top{padding:7px 10px}
+    body.xr-active #top strong{font-size:13px}
+    body.xr-active #diag{display:none}
+    body.xr-active #start{display:none}
+    body.xr-active #crosshair,body.xr-active #surface{display:block}
+    body.xr-active #controls{display:block}
+    @media (max-width:600px){button.ctrl{padding:9px 8px;font-size:11px}#controls{padding:6px}.row{gap:5px}#status{font-size:11px}}
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="hud">
+    <div id="top">
+      <strong>EVA P0.4 — WebXR direct Wall Snap</strong>
+      <div id="diag">Test direct în browser: hit-test pe plane reale, control 1:1 și snap al spatelui pergolei pe un perete selectat.</div>
+      <div id="status">Se încarcă modelul și se verifică WebXR…</div>
+    </div>
+    <button id="start">Pornește WebXR</button>
+    <div id="crosshair"></div>
+    <div id="surface">Suprafață: —</div>
+    <div id="controls">
+      <div class="row">
+        <button class="ctrl primary" id="placeFloor">Așază pe podea</button>
+        <button class="ctrl" id="horizon">Orizont</button>
+        <button class="ctrl" id="flip">Față / Spate</button>
+        <button class="ctrl" id="left">↶ 15°</button>
+        <button class="ctrl" id="right">15° ↷</button>
+      </div>
+      <div class="row">
+        <button class="ctrl warn" id="selectWall">Selectează peretele</button>
+        <button class="ctrl primary" id="snapWall">Lipește de perete</button>
+        <button class="ctrl" id="resetPlacement">Reașază</button>
+      </div>
+      <div id="hint">Îndreaptă cercul central spre pardoseală pentru „Așază”. Pentru perete: îndreaptă spre perete → „Selectează peretele” → „Lipește de perete”.</div>
+    </div>
+  </div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const MODEL_W = 8.5;
+const MODEL_P = 5.0;
+const HALF_W = MODEL_W / 2;
+const HALF_P = MODEL_P / 2;
+
+const stage = document.getElementById('stage');
+const statusEl = document.getElementById('status');
+const surfaceEl = document.getElementById('surface');
+const startBtn = document.getElementById('start');
+const controls = document.getElementById('controls');
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.01, 100);
+camera.position.set(10, 7, 11);
+camera.lookAt(0, 1.5, 0);
+
+const renderer = new THREE.WebGLRenderer({alpha:true, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.xr.enabled = true;
+renderer.xr.setReferenceSpaceType('local-floor');
+renderer.setClearColor(0xe9e9e9, 1);
+stage.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x555555, 2.0));
+const dir = new THREE.DirectionalLight(0xffffff, 2.2);
+dir.position.set(4, 8, 5);
+scene.add(dir);
+
+const anchor = new THREE.Group();
+anchor.visible = false;
+scene.add(anchor);
+
+let modelReady = false;
+let placed = false;
+let floorY = 0;
+let yaw = 0;
+let wallPoint = null;
+let wallNormal = null;
+let xrSession = null;
+let floorSpace = null;
+let viewerSpace = null;
+let hitTestSource = null;
+let currentPoint = null;
+let currentNormal = null;
+let currentSurface = '—';
+let lastUiUpdate = 0;
+
+const loader = new GLTFLoader();
+loader.load('./models/eva-p0-8500w-5000p.glb', gltf => {
+  const model = gltf.scene;
+  model.position.set(-HALF_W, 0, -HALF_P);
+  model.traverse(obj => {
+    if (obj.isMesh) {
+      obj.frustumCulled = false;
+      if (obj.material) obj.material.side = THREE.DoubleSide;
+    }
+  });
+  anchor.add(model);
+  modelReady = true;
+  anchor.visible = true;
+  anchor.position.set(0, 0, 0);
+  statusEl.textContent = 'Model gata. WebXR poate fi pornit.';
+}, undefined, err => {
+  console.error(err);
+  statusEl.textContent = 'Eroare la încărcarea modelului GLB.';
+});
+
+function normalizeYaw(v){
+  const twoPi = Math.PI * 2;
+  v %= twoPi;
+  if (v < 0) v += twoPi;
+  return v;
+}
+
+function applyYaw(next){
+  yaw = normalizeYaw(next);
+  anchor.rotation.set(0, yaw, 0);
+}
+
+function setStatus(text){ statusEl.textContent = text; }
+
+function classifyNormal(n){
+  const ay = Math.abs(n.y);
+  if (ay > 0.75) return 'PODEA';
+  if (ay < 0.35) return 'PERETE';
+  return 'PLAN ÎNCLINAT';
+}
+
+function getOutwardWallNormal(point, normal){
+  const n = normal.clone();
+  n.y = 0;
+  if (n.lengthSq() < 1e-6) return null;
+  n.normalize();
+
+  const xrCam = renderer.xr.getCamera(camera);
+  const camPos = new THREE.Vector3();
+  xrCam.getWorldPosition(camPos);
+  const toCamera = camPos.sub(point);
+  toCamera.y = 0;
+  if (toCamera.lengthSq() > 1e-6) {
+    toCamera.normalize();
+    if (n.dot(toCamera) < 0) n.negate();
+  }
+  return n;
+}
+
+async function startXR(){
+  if (!modelReady) { setStatus('Modelul încă se încarcă.'); return; }
+  if (!navigator.xr) { setStatus('navigator.xr indisponibil.'); return; }
+  try {
+    xrSession = await navigator.xr.requestSession('immersive-ar', {
+      requiredFeatures:['hit-test','local-floor','dom-overlay'],
+      optionalFeatures:['plane-detection'],
+      domOverlay:{root:document.body}
+    });
+
+    floorSpace = await xrSession.requestReferenceSpace('local-floor');
+    viewerSpace = await xrSession.requestReferenceSpace('viewer');
+    try {
+      hitTestSource = await xrSession.requestHitTestSource({space:viewerSpace, entityTypes:['plane']});
+    } catch {
+      hitTestSource = await xrSession.requestHitTestSource({space:viewerSpace});
+    }
+
+    await renderer.xr.setSession(xrSession);
+    renderer.setClearAlpha(0);
+    document.body.classList.add('xr-active');
+    setStatus('WebXR pornit. Scanează încăperea; cercul central identifică suprafața vizată.');
+
+    xrSession.addEventListener('end', () => {
+      document.body.classList.remove('xr-active');
+      renderer.setClearColor(0xe9e9e9, 1);
+      xrSession = null;
+      hitTestSource = null;
+      currentPoint = null;
+      currentNormal = null;
+      currentSurface = '—';
+      surfaceEl.textContent = 'Suprafață: —';
+      setStatus('Sesiunea WebXR s-a închis.');
+    }, {once:true});
+  } catch (err) {
+    console.error(err);
+    setStatus(`WebXR nu a pornit cu hit-test + DOM overlay: ${err.name || 'eroare'}.`);
+  }
+}
+
+startBtn.addEventListener('click', startXR);
+
+document.getElementById('placeFloor').addEventListener('click', () => {
+  if (!currentPoint || currentSurface !== 'PODEA') {
+    setStatus('Îndreaptă cercul spre pardoseală până apare „PODEA”, apoi apasă din nou.');
+    return;
+  }
+  floorY = currentPoint.y;
+  anchor.position.set(currentPoint.x, floorY, currentPoint.z);
+  anchor.visible = true;
+  placed = true;
+  setStatus('Pergola a fost așezată pe pardoseală, cu centrul amprentei în punctul selectat.');
+});
+
+document.getElementById('horizon').addEventListener('click', () => {
+  anchor.rotation.set(0, yaw, 0);
+  setStatus('Orizont aplicat: stâlpi verticali, stofă sus.');
+});
+
+document.getElementById('flip').addEventListener('click', () => {
+  applyYaw(yaw + Math.PI);
+  setStatus('Față / Spate inversat cu 180°.');
+});
+
+document.getElementById('left').addEventListener('click', () => applyYaw(yaw - THREE.MathUtils.degToRad(15)));
+document.getElementById('right').addEventListener('click', () => applyYaw(yaw + THREE.MathUtils.degToRad(15)));
+
+document.getElementById('selectWall').addEventListener('click', () => {
+  if (!currentPoint || !currentNormal || currentSurface !== 'PERETE') {
+    setStatus('Îndreaptă cercul spre perete până apare „PERETE”, apoi apasă din nou.');
+    return;
+  }
+  const n = getOutwardWallNormal(currentPoint, currentNormal);
+  if (!n) { setStatus('Normala peretelui nu a putut fi calculată.'); return; }
+  wallPoint = currentPoint.clone();
+  wallNormal = n;
+  setStatus('Perete selectat. Acum apasă „Lipește de perete”.');
+});
+
+document.getElementById('snapWall').addEventListener('click', () => {
+  if (!wallPoint || !wallNormal) {
+    setStatus('Selectează mai întâi peretele.');
+    return;
+  }
+  const wallYaw = Math.atan2(wallNormal.x, wallNormal.z);
+  applyYaw(wallYaw);
+  const center = wallPoint.clone().addScaledVector(wallNormal, HALF_P);
+  anchor.position.set(center.x, floorY, center.z);
+  anchor.visible = true;
+  placed = true;
+  setStatus('Wall Snap aplicat: spatele pergolei este pe planul peretelui; proiecția se extinde spre cameră.');
+});
+
+document.getElementById('resetPlacement').addEventListener('click', () => {
+  wallPoint = null;
+  wallNormal = null;
+  placed = false;
+  applyYaw(0);
+  anchor.position.set(0, floorY, -2);
+  setStatus('Poziția a fost resetată. Selectează din nou pardoseala sau peretele.');
+});
+
+controls.addEventListener('beforexrselect', e => e.preventDefault());
+controls.querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('pointerdown', e => e.stopPropagation());
+  btn.addEventListener('click', e => e.stopPropagation());
+});
+
+function updateHit(frame, time){
+  if (!frame || !hitTestSource || !floorSpace) return;
+  const results = frame.getHitTestResults(hitTestSource);
+  if (!results.length) {
+    currentPoint = null;
+    currentNormal = null;
+    currentSurface = '—';
+    if (time - lastUiUpdate > 120) {
+      surfaceEl.textContent = 'Suprafață: —';
+      lastUiUpdate = time;
+    }
+    return;
+  }
+  const pose = results[0].getPose(floorSpace);
+  if (!pose) return;
+  const m = new THREE.Matrix4().fromArray(pose.transform.matrix);
+  const pos = new THREE.Vector3().setFromMatrixPosition(m);
+  const q = new THREE.Quaternion().setFromRotationMatrix(m);
+  const normal = new THREE.Vector3(0,1,0).applyQuaternion(q).normalize();
+  currentPoint = pos;
+  currentNormal = normal;
+  currentSurface = classifyNormal(normal);
+  if (time - lastUiUpdate > 120) {
+    surfaceEl.textContent = `Suprafață: ${currentSurface}`;
+    lastUiUpdate = time;
+  }
+}
+
+renderer.setAnimationLoop((time, frame) => {
+  if (xrSession) updateHit(frame, time);
+  renderer.render(scene, camera);
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+(async () => {
+  if (!navigator.xr) {
+    setStatus('WebXR nu este disponibil în acest browser.');
+    startBtn.disabled = true;
+    return;
+  }
+  try {
+    const ok = await navigator.xr.isSessionSupported('immersive-ar');
+    if (!ok) {
+      setStatus('immersive-ar nu este disponibil.');
+      startBtn.disabled = true;
+    } else if (!modelReady) {
+      setStatus('WebXR disponibil. Se încarcă modelul…');
+    }
+  } catch {
+    setStatus('Nu s-a putut verifica WebXR.');
+  }
+})();
+</script>
+</body>
+</html>
