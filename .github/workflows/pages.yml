@@ -23,8 +23,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p _site/models
-          cp index.html ar.html webxr-test.html webxr-wall.html webxr-control-v10.html _site/
-          cp webxr-control-v10.html _site/webxr-control.html
+          cp index.html ar.html webxr-test.html webxr-wall.html webxr-control-v10.html webxr-control-v11.html _site/
+          cp webxr-control-v11.html _site/webxr-control.html
           cp models/eva-p0-8500w-5000p.glb _site/models/eva-p0-8500w-5000p.glb
           test -s _site/models/eva-p0-8500w-5000p.glb
       - name: Configure GitHub Pages
