@@ -4,12 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>EVA AR P0</title>
-  <script type="module" src="https://unpkg.com/@google/model-viewer@4.3.1/dist/model-viewer.min.js"></script>
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.3.1/model-viewer.min.js"></script>
   <style>
     html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Arial,sans-serif;background:#111;color:#fff}
-    main{height:100%;display:grid;grid-template-rows:auto 1fr auto}
+    main{height:100%;display:grid;grid-template-rows:auto auto 1fr auto}
     header,footer{padding:12px 16px;background:#171717}
     header strong{display:block}.muted{font-size:12px;color:#bbb;margin-top:3px}
+    #status{padding:8px 16px;background:#252525;color:#ddd;font-size:12px}
     model-viewer{width:100%;height:100%;background:#eee;--poster-color:#eee}
     .ar-button{border:0;border-radius:10px;padding:12px 18px;font-weight:650;background:#111;color:#fff;box-shadow:0 1px 6px #0005}
     footer{font-size:12px;color:#bbb}
@@ -21,11 +22,13 @@
   <strong>EVA AR P0 — 8500 × 5000 mm</strong>
   <div class="muted">Model geometric simplificat pentru validarea pipeline-ului AR; nu este geometria tehnică finală EVA.</div>
 </header>
+<div id="status">Inițializare viewer 3D…</div>
 <model-viewer
   id="eva"
   src="./models/eva-p0-8500w-5000p.glb"
   alt="Pergola EVA P0"
   camera-controls
+  auto-rotate
   touch-action="pan-y"
   shadow-intensity="1"
   exposure="1"
@@ -35,7 +38,25 @@
   ar-placement="floor">
   <button slot="ar-button" class="ar-button">Vezi pergola în spațiul tău</button>
 </model-viewer>
-<footer>Scarǎ nominală: 1 unitate model = 1 m. Test P0.</footer>
+<footer>Scară nominală: 1 unitate model = 1 m. Test P0.</footer>
 </main>
+<script type="module">
+  const status = document.getElementById('status');
+  const viewer = document.getElementById('eva');
+  customElements.whenDefined('model-viewer').then(() => {
+    status.textContent = 'Viewer 3D încărcat. Se încarcă modelul…';
+  });
+  viewer.addEventListener('load', () => {
+    status.textContent = 'Model GLB încărcat. Viewer 3D gata.';
+  });
+  viewer.addEventListener('error', (event) => {
+    status.textContent = `Eroare la încărcarea modelului: ${event.detail?.type || 'necunoscută'}`;
+  });
+  setTimeout(() => {
+    if (!customElements.get('model-viewer')) {
+      status.textContent = 'Eroare: biblioteca model-viewer nu s-a încărcat.';
+    }
+  }, 8000);
+</script>
 </body>
 </html>
