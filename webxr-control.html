@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>EVA P0.4.4 — WebXR wall control</title>
+  <title>EVA P0.5 — Indoor floor lock</title>
   <script type="importmap">
   {
     "imports": {
@@ -18,7 +18,8 @@
     #top{position:fixed;left:0;right:0;top:0;z-index:20;padding:9px 11px;background:#151515e8;backdrop-filter:blur(7px)}
     #top strong{display:block;font-size:16px}.muted{font-size:11px;color:#bbb;margin-top:2px}
     #status{margin-top:5px;font-size:12px;color:#d8d8d8}
-    #target{margin-top:4px;font-size:12px;font-weight:800;color:#ffb85c}
+    #floor{margin-top:4px;font-size:12px;font-weight:800;color:#6be38b}
+    #target{margin-top:3px;font-size:12px;font-weight:800;color:#ffb85c}
     #target.ok{color:#6be38b}
     #start{margin-top:7px;border:0;border-radius:10px;padding:11px 15px;font-weight:750;background:#fff;color:#111}
     #start:disabled{opacity:.45}
@@ -39,11 +40,12 @@
 <body>
 <div id="app"></div>
 <div id="top">
-  <strong>EVA P0.4.4 — WebXR control direct</strong>
-  <div class="muted">Wall Snap ghidat: un singur buton pentru toți cei 4 pași.</div>
-  <div id="status">Pornire modul P0.4.4…</div>
-  <div id="target">Țintă: indisponibilă</div>
-  <button id="start" disabled>Pornește WebXR P0.4.4</button>
+  <strong>EVA P0.5 — Indoor Robust Floor Lock</strong>
+  <div class="muted">Pentru spații încărcate: ținta este calculată pe planul pardoselii, nu pe primul obiect întâlnit.</div>
+  <div id="status">Pornire modul P0.5…</div>
+  <div id="floor">Pardoseală: în așteptarea WebXR</div>
+  <div id="target">Țintă pardoseală: indisponibilă</div>
+  <button id="start" disabled>Pornește WebXR P0.5</button>
 </div>
 <div id="controls">
   <div class="row">
@@ -55,7 +57,7 @@
   </div>
   <button id="wallAction">1. Definește peretele</button>
   <div id="wallInfo">Perete: nedefinit</div>
-  <div id="hint">După „Definește”, țintește PODEAUA chiar lângă baza peretelui. Când sus scrie „Țintă: OK”, apasă același buton mare pentru P1, apoi mută ținta lateral ≥30 cm și apasă din nou pentru P2.</div>
+  <div id="hint">În interior poți ținti spre pardoseală chiar dacă în zonă sunt mese/scaune. P0.5 proiectează raza camerei pe planul pardoselii blocat. Pentru perete: P1 și P2 se aleg pe podea, de-a lungul bazei peretelui.</div>
 </div>
 <script type="module">
 import * as THREE from 'three';
@@ -63,6 +65,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const app=document.getElementById('app');
 const status=document.getElementById('status');
+const floorLabel=document.getElementById('floor');
 const target=document.getElementById('target');
 const start=document.getElementById('start');
 const controls=document.getElementById('controls');
@@ -74,108 +77,180 @@ let reticle,model=null;
 let mode='place';
 let wallPoints=[];
 let wallMarkers=[];
-let lastHitPosition=null;
-let lastStableHitPosition=null;
-let lastHitTime=0;
+let wallLine=null;
+let currentFloorTarget=null;
+let lastStableFloorTarget=null;
+let lastFloorTargetTime=0;
+let lastRawHit=null;
 let yaw=0;
 let wallStage=0;
+let floorLocked=false;
+let floorY=0;
 const WIDTH=8.5;
-const HIT_GRACE_MS=1800;
+const TARGET_GRACE_MS=1400;
+const MAX_TARGET_DISTANCE=15;
 
 function setStatus(t){status.textContent=t;}
 function normalizeRad(v){return ((v%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);}
-function setTarget(ok){target.textContent=ok?'Țintă: OK — punct disponibil':'Țintă: indisponibilă';target.classList.toggle('ok',ok);}
+function setFloorLabel(){
+  floorLabel.textContent=floorLocked?`Pardoseală: BLOCATĂ ✓  y=${floorY.toFixed(2)} m (local-floor)`:'Pardoseală: neblocată';
+}
+function setTarget(ok,distance=null){
+  if(wallStage===4){target.textContent='Țintă pardoseală: nu este necesară după snap';target.classList.remove('ok');return;}
+  target.textContent=ok?`Țintă pardoseală: OK${distance!==null?' · '+distance.toFixed(1)+' m':''}`:'Țintă pardoseală: indisponibilă — înclină camera spre podea';
+  target.classList.toggle('ok',ok);
+}
 function setWallStage(stage){
   wallStage=stage;
-  if(stage===0){wallAction.textContent='1. Definește peretele';wallAction.disabled=false;}
-  if(stage===1){wallAction.textContent='2. Setează P1 aici';wallAction.disabled=false;}
-  if(stage===2){wallAction.textContent='3. Setează P2 aici';wallAction.disabled=false;}
-  if(stage===3){wallAction.textContent='4. Lipește de perete';wallAction.disabled=false;}
+  if(stage===0)wallAction.textContent='1. Definește peretele';
+  if(stage===1)wallAction.textContent='2. Setează P1 aici';
+  if(stage===2)wallAction.textContent='3. Setează P2 aici';
+  if(stage===3)wallAction.textContent='4. Lipește de perete';
+  if(stage===4)wallAction.textContent='Redefinește peretele';
 }
 
 function initScene(){
-  scene=new THREE.Scene(); camera=new THREE.PerspectiveCamera();
+  scene=new THREE.Scene();camera=new THREE.PerspectiveCamera();
   renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});
   renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.xr.enabled=true;
   renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;app.appendChild(renderer.domElement);
-  scene.add(new THREE.HemisphereLight(0xffffff,0x777777,2.0));const dl=new THREE.DirectionalLight(0xffffff,2.0);dl.position.set(2,5,2);scene.add(dl);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x777777,2.0));
+  const dl=new THREE.DirectionalLight(0xffffff,2.0);dl.position.set(2,5,2);scene.add(dl);
+
   const geo=new THREE.RingGeometry(0.085,0.12,32).rotateX(-Math.PI/2);
-  reticle=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}));reticle.matrixAutoUpdate=false;reticle.visible=false;scene.add(reticle);
-  new GLTFLoader().load('./models/eva-p0-8500w-5000p.glb',g=>{model=g.scene;model.visible=false;model.rotation.order='YXZ';scene.add(model);setStatus('Model încărcat. Verific WebXR…');},undefined,e=>setStatus('Eroare GLB: '+(e?.message||e)));
+  reticle=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide,depthTest:false}));
+  reticle.visible=false;reticle.renderOrder=999;scene.add(reticle);
+
+  new GLTFLoader().load('./models/eva-p0-8500w-5000p.glb',g=>{
+    model=g.scene;model.visible=false;model.rotation.order='YXZ';scene.add(model);setStatus('Model încărcat. Verific WebXR…');
+  },undefined,e=>setStatus('Eroare GLB: '+(e?.message||e)));
 }
 
-async function checkXR(){try{if(!navigator.xr){setStatus('navigator.xr: NU');return;}const ok=await navigator.xr.isSessionSupported('immersive-ar');setStatus('WebXR immersive-ar: '+(ok?'DA — gata de pornire':'NU'));start.disabled=!ok;}catch(e){setStatus('Eroare verificare WebXR: '+(e?.message||e));}}
+async function checkXR(){
+  try{
+    if(!navigator.xr){setStatus('navigator.xr: NU');return;}
+    const ok=await navigator.xr.isSessionSupported('immersive-ar');
+    setStatus('WebXR immersive-ar: '+(ok?'DA — gata de pornire':'NU'));
+    start.disabled=!ok;
+  }catch(e){setStatus('Eroare verificare WebXR: '+(e?.message||e));}
+}
+
 function applyYaw(next){yaw=normalizeRad(next);if(model){model.rotation.x=0;model.rotation.z=0;model.rotation.y=yaw;}}
-function matrixPosition(mat){const p=new THREE.Vector3();p.setFromMatrixPosition(mat);return p;}
-function currentStableHit(){if(lastStableHitPosition && (performance.now()-lastHitTime)<HIT_GRACE_MS)return lastStableHitPosition.clone();return null;}
+function currentStableFloorTarget(){
+  if(currentFloorTarget)return currentFloorTarget.clone();
+  if(lastStableFloorTarget&&(performance.now()-lastFloorTargetTime)<TARGET_GRACE_MS)return lastStableFloorTarget.clone();
+  return null;
+}
 
-function placeAtCurrentHit(){const p=currentStableHit();if(!model||!p){setStatus('Nu există o țintă stabilă pe pardoseală.');return;}model.position.copy(p);model.rotation.x=0;model.rotation.z=0;model.visible=true;mode='idle';setStatus('Pergola plasată. Pentru perete folosește butonul mare de jos.');}
-function onSelect(){if(mode==='place')placeAtCurrentHit();}
+function updateFloorTarget(frame){
+  if(!floorLocked||!refSpace){currentFloorTarget=null;reticle.visible=false;setTarget(false);return;}
+  const pose=frame.getViewerPose(refSpace);
+  if(!pose||!pose.views.length){currentFloorTarget=null;reticle.visible=false;setTarget(false);return;}
+  const t=pose.views[0].transform;
+  const origin=new THREE.Vector3(t.position.x,t.position.y,t.position.z);
+  const q=new THREE.Quaternion(t.orientation.x,t.orientation.y,t.orientation.z,t.orientation.w);
+  const dir=new THREE.Vector3(0,0,-1).applyQuaternion(q).normalize();
+  if(dir.y>=-0.025){currentFloorTarget=null;reticle.visible=false;setTarget(false);return;}
+  const dist=(floorY-origin.y)/dir.y;
+  if(!Number.isFinite(dist)||dist<0.2||dist>MAX_TARGET_DISTANCE){currentFloorTarget=null;reticle.visible=false;setTarget(false);return;}
+  const p=origin.clone().addScaledVector(dir,dist);p.y=floorY;
+  currentFloorTarget=p;lastStableFloorTarget=p.clone();lastFloorTargetTime=performance.now();
+  reticle.position.copy(p);reticle.visible=true;setTarget(true,dist);
+}
 
-function clearWallMarkers(){wallMarkers.forEach(m=>scene.remove(m));wallMarkers=[];}
-function addWallMarker(p,index){const m=new THREE.Mesh(new THREE.SphereGeometry(0.07,16,12),new THREE.MeshBasicMaterial({color:index===0?0x55ff99:0xffcc55}));m.position.copy(p);scene.add(m);wallMarkers.push(m);}
+function placeAtFloorTarget(){
+  const p=currentStableFloorTarget();
+  if(!model||!p){setStatus('Nu există țintă pe pardoseală. Înclină camera spre podea până apare „Țintă pardoseală: OK”.');return;}
+  model.position.copy(p);model.position.y=floorY;model.rotation.x=0;model.rotation.z=0;model.visible=true;mode='idle';
+  setStatus('Pergola plasată pe pardoseala blocată. Obiectele intermediare sunt ignorate pentru cota podelei.');
+}
+function onSelect(){if(mode==='place')placeAtFloorTarget();}
+
+function clearWallGeometry(){
+  wallMarkers.forEach(m=>scene.remove(m));wallMarkers=[];
+  if(wallLine){scene.remove(wallLine);wallLine.geometry.dispose();wallLine.material.dispose();wallLine=null;}
+}
+function addWallMarker(p,index){
+  const m=new THREE.Mesh(new THREE.SphereGeometry(0.07,16,12),new THREE.MeshBasicMaterial({color:index===0?0x55ff99:0xffcc55,depthTest:false}));
+  m.position.copy(p);m.position.y=floorY+0.03;m.renderOrder=998;scene.add(m);wallMarkers.push(m);
+}
+function drawWallLine(){
+  if(wallPoints.length!==2)return;
+  const a=wallPoints[0].clone(),b=wallPoints[1].clone();a.y=b.y=floorY+0.025;
+  const g=new THREE.BufferGeometry().setFromPoints([a,b]);
+  const m=new THREE.LineBasicMaterial({color:0x55ff99,depthTest:false});
+  wallLine=new THREE.Line(g,m);wallLine.renderOrder=997;scene.add(wallLine);
+}
 
 function beginWallDefinition(){
-  wallPoints=[];clearWallMarkers();mode='wall';wallInfo.textContent='Perete: pregătire P1';
-  setWallStage(1);
-  setStatus('Țintește PODEAUA chiar lângă baza peretelui. Când „Țintă: OK”, apasă „2. Setează P1 aici”.');
+  wallPoints=[];clearWallGeometry();mode='wall';setWallStage(1);wallInfo.textContent='Perete: pregătire P1';
+  setStatus('Înclină camera spre PODEAUA de la baza peretelui. Când ținta este OK, apasă „2. Setează P1 aici”.');
 }
-
 function captureWallPoint(index){
   if(mode!=='wall'){setStatus('Începe cu „1. Definește peretele”.');return false;}
-  const p=currentStableHit();
-  if(!p){setStatus('Ținta nu este disponibilă. Mișcă telefonul spre podeaua de lângă perete până apare verde „Țintă: OK”.');return false;}
+  const p=currentStableFloorTarget();
+  if(!p){setStatus('Ținta pardoselii nu este disponibilă. Înclină camera spre podea până apare verde „Țintă pardoseală: OK”.');return false;}
+  p.y=floorY;
   if(index===0){
-    wallPoints=[p];clearWallMarkers();addWallMarker(p,0);wallInfo.textContent='Perete: P1 setat — mută lateral pentru P2';
-    setWallStage(2);
-    setStatus('P1 salvat. Mută ținta lateral ≥30 cm de-a lungul bazei peretelui; când ținta este verde, apasă „3. Setează P2 aici”.');
-    return true;
+    wallPoints=[p];clearWallGeometry();addWallMarker(p,0);wallInfo.textContent='Perete: P1 setat — mută lateral pentru P2';setWallStage(2);
+    setStatus('P1 salvat. Țintește lateral ≥30 cm de-a lungul bazei aceluiași perete și apasă „3. Setează P2 aici”.');return true;
   }
   if(wallPoints.length<1){setStatus('P1 lipsește. Reia definirea.');setWallStage(0);return false;}
   const a=wallPoints[0];const dx=p.x-a.x,dz=p.z-a.z;const len=Math.hypot(dx,dz);
-  if(len<0.30){setStatus('P2 prea aproape de P1. Mută ținta cel puțin ~30 cm lateral și apasă din nou același buton.');return false;}
-  wallPoints[1]=p;addWallMarker(p,1);const deg=Math.atan2(dz,dx)*180/Math.PI;mode='idle';wallInfo.textContent=`Perete definit: ${len.toFixed(2)} m | ${deg.toFixed(1)}°`;
-  setWallStage(3);
-  setStatus('P1 și P2 sunt setate. Apasă „4. Lipește de perete”.');
-  return true;
+  if(len<0.30){setStatus('P2 prea aproape de P1. Mută ținta cel puțin ~30 cm lateral.');return false;}
+  wallPoints[1]=p;addWallMarker(p,1);drawWallLine();
+  const deg=Math.atan2(dz,dx)*180/Math.PI;mode='idle';wallInfo.textContent=`Perete definit ✓  ${len.toFixed(2)} m | ${deg.toFixed(1)}°`;setWallStage(3);
+  setStatus('Linia P1–P2 este definită pe pardoseală. Apasă „4. Lipește de perete”.');return true;
 }
 
 function snapToWall(){
   if(!model||wallPoints.length!==2){setStatus('Peretele nu este definit complet.');setWallStage(0);return;}
   const a=wallPoints[0],b=wallPoints[1];let dx=b.x-a.x,dz=b.z-a.z;const len=Math.hypot(dx,dz);if(!len)return;
   let ux=dx/len,uz=dz/len;const mx=(a.x+b.x)/2,mz=(a.z+b.z)/2;
-  const xrCam=renderer.xr.getCamera(camera);const camPos=new THREE.Vector3();xrCam.getWorldPosition(camPos);let nx=-uz,nz=ux;const cameraSide=(camPos.x-mx)*nx+(camPos.z-mz)*nz;
-  if(cameraSide<0){ux=-ux;uz=-uz;}
-  applyYaw(Math.atan2(-uz,ux));const floorY=model.position.y;model.position.x=mx-ux*(WIDTH/2);model.position.z=mz-uz*(WIDTH/2);model.position.y=floorY;model.visible=true;
-  wallInfo.textContent='Perete: snap aplicat';
-  setStatus('Wall Snap aplicat. Bara SPATE este pe linia P1–P2.');
-  setWallStage(0);
+  const xrCam=renderer.xr.getCamera(camera);const camPos=new THREE.Vector3();xrCam.getWorldPosition(camPos);
+  let nx=-uz,nz=ux;const cameraSide=(camPos.x-mx)*nx+(camPos.z-mz)*nz;if(cameraSide<0){ux=-ux;uz=-uz;}
+  applyYaw(Math.atan2(-uz,ux));
+  model.position.x=mx-ux*(WIDTH/2);model.position.z=mz-uz*(WIDTH/2);model.position.y=floorY;model.visible=true;
+  wallInfo.textContent='Perete: SNAP APLICAT ✓';setWallStage(4);setTarget(false);
+  setStatus('Wall Snap aplicat. Bara SPATE este pe linia P1–P2; stâlpii rămân pe pardoseala blocată.');
 }
 
 async function startXR(){
   start.disabled=true;setStatus('Se solicită sesiunea WebXR…');
   try{
     session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['hit-test','local-floor'],optionalFeatures:['dom-overlay'],domOverlay:{root:document.body}});
-    renderer.xr.setReferenceSpaceType('local-floor');await renderer.xr.setSession(session);refSpace=await session.requestReferenceSpace('local-floor');viewerSpace=await session.requestReferenceSpace('viewer');hitTestSource=await session.requestHitTestSource({space:viewerSpace});
-    session.addEventListener('select',onSelect);session.addEventListener('end',()=>{controls.classList.remove('active');start.style.display='inline-block';start.disabled=false;reticle.visible=false;lastHitPosition=null;lastStableHitPosition=null;setTarget(false);setWallStage(0);setStatus('Sesiune WebXR închisă.');});
-    controls.classList.add('active');start.style.display='none';mode=model?.visible?'idle':'place';setWallStage(0);setStatus('WebXR pornit. '+(mode==='place'?'Țintește pardoseala și atinge ecranul pentru plasare.':'Model activ.'));
+    renderer.xr.setReferenceSpaceType('local-floor');await renderer.xr.setSession(session);
+    refSpace=await session.requestReferenceSpace('local-floor');viewerSpace=await session.requestReferenceSpace('viewer');hitTestSource=await session.requestHitTestSource({space:viewerSpace});
+    floorY=0;floorLocked=true;setFloorLabel();
+    session.addEventListener('select',onSelect);
+    session.addEventListener('end',()=>{
+      controls.classList.remove('active');start.style.display='inline-block';start.disabled=false;reticle.visible=false;currentFloorTarget=null;lastStableFloorTarget=null;floorLocked=false;setFloorLabel();setTarget(false);setWallStage(0);setStatus('Sesiune WebXR închisă.');
+    });
+    controls.classList.add('active');start.style.display='none';mode=model?.visible?'idle':'place';setWallStage(0);
+    setStatus('WebXR pornit. Pardoseala local-floor este blocată. Înclină camera spre podea; când ținta devine verde, atinge ecranul pentru plasare.');
     renderer.setAnimationLoop(render);
   }catch(e){setStatus('WebXR start eșuat: '+(e?.name||'Error')+' — '+(e?.message||e));start.disabled=false;}
 }
 
-function render(_t,frame){
-  if(frame&&hitTestSource&&refSpace){const hits=frame.getHitTestResults(hitTestSource);if(hits.length){const pose=hits[0].getPose(refSpace);reticle.visible=true;reticle.matrix.fromArray(pose.transform.matrix);lastHitPosition=matrixPosition(reticle.matrix);lastStableHitPosition=lastHitPosition.clone();lastHitTime=performance.now();setTarget(true);}else{reticle.visible=false;lastHitPosition=null;setTarget((performance.now()-lastHitTime)<HIT_GRACE_MS);}}
+function render(_time,frame){
+  if(frame&&refSpace){
+    updateFloorTarget(frame);
+    if(hitTestSource){
+      const hits=frame.getHitTestResults(hitTestSource);
+      if(hits.length){const pose=hits[0].getPose(refSpace);lastRawHit=new THREE.Vector3(pose.transform.position.x,pose.transform.position.y,pose.transform.position.z);}
+    }
+  }
   renderer.render(scene,camera);
 }
 
 start.addEventListener('click',startXR);
-document.getElementById('horizon').addEventListener('click',()=>{if(model){model.rotation.x=0;model.rotation.z=0;setStatus('Orizont aplicat.');}});
+document.getElementById('horizon').addEventListener('click',()=>{if(model){model.rotation.x=0;model.rotation.z=0;model.position.y=floorY;setStatus('Orizont aplicat; baza rămâne pe pardoseala blocată.');}});
 document.getElementById('flip').addEventListener('click',()=>{applyYaw(yaw+Math.PI);setStatus('Față / Spate inversat 180°.');});
 document.getElementById('left').addEventListener('click',()=>applyYaw(yaw+THREE.MathUtils.degToRad(15)));
 document.getElementById('right').addEventListener('click',()=>applyYaw(yaw-THREE.MathUtils.degToRad(15)));
-document.getElementById('replace').addEventListener('click',()=>{mode='place';setStatus('Reașezare: țintește pardoseala și atinge ecranul.');});
+document.getElementById('replace').addEventListener('click',()=>{mode='place';setWallStage(wallStage===4?4:wallStage);setStatus('Reașezare: înclină camera spre pardoseală până ținta este verde, apoi atinge ecranul.');});
 wallAction.addEventListener('click',()=>{
-  if(wallStage===0){beginWallDefinition();return;}
+  if(wallStage===0||wallStage===4){beginWallDefinition();return;}
   if(wallStage===1){captureWallPoint(0);return;}
   if(wallStage===2){captureWallPoint(1);return;}
   if(wallStage===3){snapToWall();return;}
