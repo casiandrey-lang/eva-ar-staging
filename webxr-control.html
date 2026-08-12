@@ -418,7 +418,7 @@ function render(_t,frame){
 start.onclick=startXR;
 $('horizon').onclick=()=>{if(model){model.rotation.x=0;model.rotation.z=0;updateLockAfterManualChange();setStatus('Orizont aplicat.')}};
 $('flip').onclick=()=>applyYaw(yaw+Math.PI);
-$('replace').onclick=()=>{if(!floorCalibrated){setStatus('Mai întâi calibrează pardoseala.');return}unlockWorld();mode='place';setStatus('Reașezare: țintește podeaua și atinge ecranul.')}};
+$('replace').onclick=()=>{if(!floorCalibrated){setStatus('Mai întâi calibrează pardoseala.');return}unlockWorld();mode='place';setStatus('Reașezare: țintește podeaua și atinge ecranul.')};
 $('reset').onclick=fullReset;
 moreToggle.onclick=toggleMore;
 $('moveLeft').onclick=()=>worldMove(-MOVE_STEP,0);$('moveRight').onclick=()=>worldMove(MOVE_STEP,0);$('moveForward').onclick=()=>worldMove(0,MOVE_STEP);$('moveBack').onclick=()=>worldMove(0,-MOVE_STEP);
