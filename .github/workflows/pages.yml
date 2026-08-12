@@ -24,7 +24,7 @@ jobs:
         run: |
           mkdir -p _site/models
           cp index.html ar.html _site/
-          base64 -d models/eva-p0-8500w-5000p.glb.b64 > _site/models/eva-p0-8500w-5000p.glb
+          cp models/eva-p0-8500w-5000p.glb _site/models/eva-p0-8500w-5000p.glb
           test -s _site/models/eva-p0-8500w-5000p.glb
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
