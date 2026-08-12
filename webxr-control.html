@@ -3,27 +3,44 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>EVA P0.9 — Hard lock + reset</title>
+<title>EVA P0.10 — calibrated floor + attached lock</title>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js"}}</script>
 <style>
-html,body{margin:0;height:100%;overflow:hidden;background:#111;color:#fff;font-family:system-ui,Segoe UI,Arial,sans-serif}#app{position:fixed;inset:0}canvas{display:block;width:100%;height:100%}
+html,body{margin:0;height:100%;overflow:hidden;background:#111;color:#fff;font-family:system-ui,Segoe UI,Arial,sans-serif}
+#app{position:fixed;inset:0}canvas{display:block;width:100%;height:100%}
 #top{position:fixed;left:6px;right:6px;top:max(5px,env(safe-area-inset-top));z-index:20;padding:5px 7px;border-radius:10px;background:#111c;backdrop-filter:blur(7px);box-shadow:0 1px 7px #0008}
 #topLine{display:flex;align-items:center;gap:6px}#top strong{font-size:12px;white-space:nowrap}#status{flex:1;min-width:0;font-size:10px;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
-#chips{display:flex;gap:5px;margin-top:3px;overflow:hidden}.chip{font-size:9px;font-weight:800;padding:2px 5px;border-radius:6px;background:#222d;white-space:nowrap}.good{color:#76e49a}.warn{color:#ffc46c}#target.ok,#lock.ok{color:#76e49a}
+#chips{display:flex;gap:5px;margin-top:3px;overflow:auto}.chip{font-size:9px;font-weight:800;padding:2px 5px;border-radius:6px;background:#222d;white-space:nowrap}.good{color:#76e49a}.warn{color:#ffc46c}.bad{color:#ff9494}
 #start{margin-left:auto;border:0;border-radius:8px;padding:7px 10px;font-weight:800;background:#fff;color:#111;font-size:11px}#start:disabled{opacity:.45}
 #controls{position:fixed;left:50%;bottom:max(5px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;width:min(96%,680px);display:none;gap:5px;padding:6px;border-radius:14px;background:#111d;backdrop-filter:blur(8px);box-shadow:0 2px 12px #0009}#controls.active{display:grid}
-.row{display:flex;gap:4px;justify-content:center;align-items:center}button.ctrl{border:1px solid #ffffff38;border-radius:9px;padding:8px 8px;background:#222e;color:#fff;font-weight:750;font-size:11px;min-height:38px}button.ctrl.primary{background:#fff;color:#111}button.ctrl.danger{border-color:#ff9b9b88;color:#ffd0d0}#mainRow button{flex:1;min-width:0;padding-left:4px;padding-right:4px}#moreToggle.open{background:#fff;color:#111}
-#wallAction{width:100%;border:2px solid #fff;border-radius:11px;padding:11px 9px;background:#fff;color:#111;font-size:14px;font-weight:900;min-height:44px}#wallInfo{font-size:9px;color:#ddd;text-align:center;font-weight:700;min-height:11px}
-#morePanel{display:none;gap:5px;max-height:31vh;overflow:auto;padding:5px;border:1px solid #ffffff2c;border-radius:10px;background:#171717e8}#morePanel.open{display:grid}.section{display:grid;gap:4px}.sectionTitle{font-size:9px;font-weight:800;color:#bbb;text-align:center}.compactRow{display:grid;grid-template-columns:repeat(6,1fr);gap:3px}.compactRow button{padding:6px 3px;min-height:34px;font-size:10px}.twoRow{display:grid;grid-template-columns:repeat(2,1fr);gap:4px}.threeRow{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}.rangeRow{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:5px;font-size:9px}.rangeRow input{width:100%}#heightInfo,#fabricInfo{font-size:9px;color:#ccc;text-align:center}
+.row{display:flex;gap:4px;justify-content:center;align-items:center}button.ctrl{border:1px solid #ffffff38;border-radius:9px;padding:8px 8px;background:#222e;color:#fff;font-weight:750;font-size:11px;min-height:38px}button.ctrl.primary{background:#fff;color:#111}button.ctrl.danger{border-color:#ff9b9b88;color:#ffd0d0}
+#mainRow button{flex:1;min-width:0;padding-left:4px;padding-right:4px}#moreToggle.open{background:#fff;color:#111}
+#mainAction{width:100%;border:2px solid #fff;border-radius:11px;padding:11px 9px;background:#fff;color:#111;font-size:14px;font-weight:900;min-height:44px}
+#wallInfo{font-size:9px;color:#ddd;text-align:center;font-weight:700;min-height:11px}
+#morePanel{display:none;gap:5px;max-height:31vh;overflow:auto;padding:5px;border:1px solid #ffffff2c;border-radius:10px;background:#171717e8}#morePanel.open{display:grid}
+.section{display:grid;gap:4px}.sectionTitle{font-size:9px;font-weight:800;color:#bbb;text-align:center}
+.compactRow{display:grid;grid-template-columns:repeat(6,1fr);gap:3px}.compactRow button{padding:6px 3px;min-height:34px;font-size:10px}
+.twoRow{display:grid;grid-template-columns:repeat(2,1fr);gap:4px}.threeRow{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.rangeRow{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:5px;font-size:9px}.rangeRow input{width:100%}
+#heightInfo,#fabricInfo,#scaleInfo{font-size:9px;color:#ccc;text-align:center}
 </style>
-<script>window.addEventListener('error',e=>{const s=document.getElementById('status');if(s)s.textContent='Eroare: '+(e.message||'necunoscută')});window.addEventListener('unhandledrejection',e=>{const s=document.getElementById('status');if(s)s.textContent='Eroare async: '+(e.reason?.message||e.reason||'necunoscută')});</script>
+<script>
+window.addEventListener('error',e=>{const s=document.getElementById('status');if(s)s.textContent='Eroare: '+(e.message||'necunoscută')});
+window.addEventListener('unhandledrejection',e=>{const s=document.getElementById('status');if(s)s.textContent='Eroare async: '+(e.reason?.message||e.reason||'necunoscută')});
+</script>
 </head>
 <body>
 <div id="app"></div>
 <div id="top">
-  <div id="topLine"><strong>EVA 3,5 × 2,0 · P0.9</strong><div id="status">Pornire…</div><button id="start" disabled>WebXR</button></div>
-  <div id="chips"><span id="floor" class="chip warn">Sol: —</span><span id="target" class="chip warn">Țintă: —</span><span id="lock" class="chip warn">Lock: NU</span></div>
+  <div id="topLine"><strong>EVA 3,5 × 2,0 · P0.10</strong><div id="status">Pornire…</div><button id="start" disabled>WebXR</button></div>
+  <div id="chips">
+    <span id="floor" class="chip warn">Sol: NECALIBRAT</span>
+    <span id="target" class="chip warn">Țintă: —</span>
+    <span id="lock" class="chip warn">Lock: NU</span>
+    <span id="scale" class="chip good">1:1 · 3.50×2.00×2.85m</span>
+  </div>
 </div>
+
 <div id="controls">
   <div id="mainRow" class="row">
     <button id="horizon" class="ctrl primary">Orizont</button>
@@ -32,88 +49,392 @@ html,body{margin:0;height:100%;overflow:hidden;background:#111;color:#fff;font-f
     <button id="reset" class="ctrl danger">Reset</button>
     <button id="moreToggle" class="ctrl">Mai mult</button>
   </div>
-  <button id="wallAction">1. Definește peretele</button>
-  <div id="wallInfo">Perete: nedefinit</div>
+
+  <button id="mainAction">0. Calibrează pardoseala</button>
+  <div id="wallInfo">Țintește o zonă vizibilă de pardoseală reală.</div>
+
   <div id="morePanel">
-    <div class="section"><div class="sectionTitle">Poziție fină · 5 cm / 5°</div><div class="compactRow">
-      <button id="moveLeft" class="ctrl">←</button><button id="moveForward" class="ctrl">↑</button><button id="moveBack" class="ctrl">↓</button><button id="moveRight" class="ctrl">→</button><button id="fineLeft" class="ctrl">↶5°</button><button id="fineRight" class="ctrl">5°↷</button>
-    </div><div class="twoRow"><button id="coarseLeft" class="ctrl">↶ 15°</button><button id="coarseRight" class="ctrl">15° ↷</button></div></div>
-    <div class="section"><div class="sectionTitle">Înălțime</div><div class="twoRow"><button id="heightDown" class="ctrl">H −5 cm</button><button id="heightUp" class="ctrl">H +5 cm</button></div><div id="heightInfo">H spate 2.85 m · H față 2.60 m</div></div>
-    <div class="section"><div class="sectionTitle">Stofă · profile · LED</div><div class="rangeRow"><span>0%</span><input id="fabricRange" type="range" min="0" max="100" step="5" value="100"><span>100%</span></div><div class="threeRow"><button id="fabricClose" class="ctrl">Stofă 0%</button><button id="fabricOpen" class="ctrl">Stofă 100%</button><button id="ledToggle" class="ctrl primary">LED ON</button></div><div id="fabricInfo">Stofă 100% · 6 profile · LED ON</div></div>
+    <div class="section">
+      <div class="sectionTitle">Poziție fină · 5 cm / 5°</div>
+      <div class="compactRow">
+        <button id="moveLeft" class="ctrl">←</button><button id="moveForward" class="ctrl">↑</button><button id="moveBack" class="ctrl">↓</button><button id="moveRight" class="ctrl">→</button><button id="fineLeft" class="ctrl">↶5°</button><button id="fineRight" class="ctrl">5°↷</button>
+      </div>
+      <div class="twoRow"><button id="coarseLeft" class="ctrl">↶ 15°</button><button id="coarseRight" class="ctrl">15° ↷</button></div>
+    </div>
+    <div class="section">
+      <div class="sectionTitle">Înălțime</div>
+      <div class="twoRow"><button id="heightDown" class="ctrl">H −5 cm</button><button id="heightUp" class="ctrl">H +5 cm</button></div>
+      <div id="heightInfo">H spate 2.85 m · H față 2.60 m</div>
+    </div>
+    <div class="section">
+      <div class="sectionTitle">Stofă · profile · LED</div>
+      <div class="rangeRow"><span>0%</span><input id="fabricRange" type="range" min="0" max="100" step="5" value="100"><span>100%</span></div>
+      <div class="threeRow"><button id="fabricClose" class="ctrl">Stofă 0%</button><button id="fabricOpen" class="ctrl">Stofă 100%</button><button id="ledToggle" class="ctrl primary">LED ON</button></div>
+      <div id="fabricInfo">Stofă 100% · 6 profile · LED ON</div>
+    </div>
+    <div class="section">
+      <div class="sectionTitle">Diagnostic scară</div>
+      <div id="scaleInfo">W=3.50 m · P=2.00 m · H spate=2.85 m · H față=2.60 m · pantă≈7.13°</div>
+    </div>
   </div>
 </div>
+
 <script type="module">
 import * as THREE from 'three';
 
-const app=document.getElementById('app'),status=document.getElementById('status'),floorLabel=document.getElementById('floor'),target=document.getElementById('target'),lockLabel=document.getElementById('lock'),start=document.getElementById('start'),controls=document.getElementById('controls'),wallInfo=document.getElementById('wallInfo'),wallAction=document.getElementById('wallAction'),heightInfo=document.getElementById('heightInfo'),fabricInfo=document.getElementById('fabricInfo'),fabricRange=document.getElementById('fabricRange'),ledToggle=document.getElementById('ledToggle'),morePanel=document.getElementById('morePanel'),moreToggle=document.getElementById('moreToggle');
+const $=id=>document.getElementById(id);
+const app=$('app'),status=$('status'),floorLabel=$('floor'),targetLabel=$('target'),lockLabel=$('lock'),start=$('start'),controls=$('controls'),
+mainAction=$('mainAction'),wallInfo=$('wallInfo'),heightInfo=$('heightInfo'),fabricInfo=$('fabricInfo'),fabricRange=$('fabricRange'),
+ledToggle=$('ledToggle'),morePanel=$('morePanel'),moreToggle=$('moreToggle');
 
 let renderer,scene,camera,session,refSpace,viewerSpace,hitTestSource,reticle,model=null;
-let mode='place',wallPoints=[],wallMarkers=[],wallBand=null,currentFloorTarget=null,lastStableFloorTarget=null,lastFloorTargetTime=0,yaw=0,wallStage=0,floorLocked=false,floorY=0;
-let lockedToWorld=false,lockedPose=null,suppressSelectUntil=0;
-let rearH=2.85,frontH=2.60,heightOffset=0,fabricPct=100,ledOn=true;
-const WIDTH=3.5,PROJECTION=2.0,BASE_REAR_H=2.85,BASE_FRONT_H=2.60,MOVE_STEP=.05,HEIGHT_STEP=.05,FINE_ROTATE_STEP=THREE.MathUtils.degToRad(5),TARGET_GRACE_MS=1400,MAX_TARGET_DISTANCE=15;
+let mode='idle',wallStage=0,suppressSelectUntil=0;
+let currentFloorTarget=null,lastStableFloorTarget=null,lastFloorTargetTime=0;
+let latestFloorCandidate=null,pendingFloorCalibration=false,floorCalibrated=false;
+let floorPoint=new THREE.Vector3(),floorNormal=new THREE.Vector3(0,1,0);
+let floorAnchor=null,floorAnchorMatrix=null,floorAnchorStatus='none';
+let lockedToWorld=false,lockedWorldPose=null,modelRelativeToFloor=null;
+let wallPoints=[],wallPointsLocal=[],wallMarkers=[],wallBand=null;
+let yaw=0,rearH=2.85,frontH=2.60,heightOffset=0,fabricPct=100,ledOn=true;
+
+const WIDTH=3.5,PROJECTION=2.0,BASE_REAR_H=2.85,BASE_FRONT_H=2.60;
+const MOVE_STEP=.05,HEIGHT_STEP=.05,FINE_ROTATE_STEP=THREE.MathUtils.degToRad(5),TARGET_GRACE_MS=1400,MAX_TARGET_DISTANCE=15,MIN_FLOOR_DROP=.65;
 const refs={};
 
 function setStatus(t){status.textContent=t}
 function normalizeRad(v){return((v%(Math.PI*2))+(Math.PI*2))%(Math.PI*2)}
-function setFloorLabel(){floorLabel.textContent=floorLocked?'Sol: BLOCAT ✓':'Sol: —';floorLabel.classList.toggle('good',floorLocked);floorLabel.classList.toggle('warn',!floorLocked)}
-function setLockLabel(){lockLabel.textContent=lockedToWorld?'Lock: HARD ✓':'Lock: NU';lockLabel.classList.toggle('ok',lockedToWorld);lockLabel.classList.toggle('warn',!lockedToWorld)}
-function setTarget(ok,d=null){if(lockedToWorld){target.textContent='Țintă: —';target.classList.remove('ok');return}target.textContent=ok?`Țintă: OK${d!==null?' '+d.toFixed(1)+'m':''}`:'Țintă: —';target.classList.toggle('ok',ok)}
-function setWallStage(s){wallStage=s;wallAction.textContent=s===0?'1. Definește peretele':s===1?'2. Setează P1':s===2?'3. Setează P2':s===3?'4. Lipește + blochează':'Redefinește peretele'}
 function closeMore(){morePanel.classList.remove('open');moreToggle.classList.remove('open');moreToggle.textContent='Mai mult'}
 function toggleMore(){const open=morePanel.classList.toggle('open');moreToggle.classList.toggle('open',open);moreToggle.textContent=open?'Închide':'Mai mult'}
-function markUiInteraction(){suppressSelectUntil=performance.now()+450}
+function markUiInteraction(){suppressSelectUntil=performance.now()+500}
 controls.addEventListener('pointerdown',markUiInteraction,true);
 
-function box(group,name,size,pos,material,rotX=0){const m=new THREE.Mesh(new THREE.BoxGeometry(...size),material);m.name=name;m.position.set(...pos);m.rotation.x=rotX;group.add(m);return m}
-function clearModelChildren(){while(model.children.length){const c=model.children.pop();c.geometry?.dispose?.();if(c.material){if(Array.isArray(c.material))c.material.forEach(m=>m.dispose?.());else c.material.dispose?.()}}Object.keys(refs).forEach(k=>delete refs[k])}
+function setFloorLabel(){
+  if(!floorCalibrated){floorLabel.textContent='Sol: NECALIBRAT';floorLabel.className='chip warn';return}
+  floorLabel.textContent=floorAnchorStatus==='attached'?'Sol: ANCORAT ✓':'Sol: CALIBRAT ✓';
+  floorLabel.className='chip good';
+}
+function setTargetLabel(ok,d=null,raw=false){
+  if(lockedToWorld){targetLabel.textContent='Țintă: —';targetLabel.className='chip warn';return}
+  if(ok){targetLabel.textContent=raw?`Sol candidat${d!==null?' '+d.toFixed(1)+'m':''}`:`Țintă: OK${d!==null?' '+d.toFixed(1)+'m':''}`;targetLabel.className='chip good'}
+  else{targetLabel.textContent=floorCalibrated?'Țintă: —':'Sol candidat: —';targetLabel.className='chip warn'}
+}
+function setLockLabel(){
+  if(!lockedToWorld){lockLabel.textContent='Lock: NU';lockLabel.className='chip warn';return}
+  lockLabel.textContent=floorAnchorStatus==='attached'?'Lock: FLOOR ANCHOR ✓':'Lock: LOCAL ✓';
+  lockLabel.className='chip good';
+}
+function refreshMainAction(){
+  if(!floorCalibrated){mainAction.textContent=pendingFloorCalibration?'Ține camera pe pardoseală…':'0. Calibrează pardoseala';wallInfo.textContent='Țintește o zonă vizibilă de pardoseală reală.';return}
+  if(wallStage===0){mainAction.textContent='1. Definește peretele';wallInfo.textContent='Pergola poate fi plasată prin atingerea pardoselii.'}
+  if(wallStage===1){mainAction.textContent='2. Setează P1';wallInfo.textContent='P1 la baza peretelui.'}
+  if(wallStage===2){mainAction.textContent='3. Setează P2';wallInfo.textContent='Mută lateral ≥30 cm pe aceeași linie.'}
+  if(wallStage===3){mainAction.textContent='4. Lipește + blochează';wallInfo.textContent='Bara SPATE va fi centrată pe P1–P2.'}
+  if(wallStage===4){mainAction.textContent='Redefinește peretele';wallInfo.textContent=lockedToWorld?'SNAP + LOCK activ ✓':'Perete definit'}
+}
+
+function box(group,name,size,pos,material,rotX=0){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(...size),material);m.name=name;m.position.set(...pos);m.rotation.x=rotX;group.add(m);return m
+}
+function clearModelChildren(){
+  while(model.children.length){const c=model.children.pop();c.geometry?.dispose?.();if(c.material){if(Array.isArray(c.material))c.material.forEach(m=>m.dispose?.());else c.material.dispose?.()}}
+  Object.keys(refs).forEach(k=>delete refs[k])
+}
 function buildModelGeometry(){
-  if(!model)return;clearModelChildren();rearH=BASE_REAR_H+heightOffset;frontH=BASE_FRONT_H+heightOffset;
-  const metal=new THREE.MeshStandardMaterial({color:0xc6c9cc,metalness:.52,roughness:.35}),fabricMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.82,side:THREE.DoubleSide}),profileMat=new THREE.MeshStandardMaterial({color:0xbfc3c7,metalness:.48,roughness:.38}),ledMat=new THREE.MeshStandardMaterial({color:0xfff7dc,emissive:ledOn?0xfff1b8:0x000000,emissiveIntensity:ledOn?4:0,roughness:.3});
+  if(!model)return;
+  clearModelChildren();
+  rearH=BASE_REAR_H+heightOffset;frontH=BASE_FRONT_H+heightOffset;
+  const metal=new THREE.MeshStandardMaterial({color:0xc6c9cc,metalness:.52,roughness:.35});
+  const fabricMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.82,side:THREE.DoubleSide});
+  const profileMat=new THREE.MeshStandardMaterial({color:0xbfc3c7,metalness:.48,roughness:.38});
+  const ledMat=new THREE.MeshStandardMaterial({color:0xfff7dc,emissive:ledOn?0xfff1b8:0x000000,emissiveIntensity:ledOn?4:0,roughness:.3});
   const drop=rearH-frontH,slope=Math.atan2(drop,PROJECTION),midH=(rearH+frontH)/2,railLen=Math.hypot(PROJECTION,drop),edgeX=WIDTH/2-.06;
-  refs.rear=box(model,'rear_beam',[WIDTH,.18,.14],[0,rearH-.09,.07],metal);refs.front=box(model,'front_gutter',[WIDTH,.20,.16],[0,frontH-.10,PROJECTION-.08],metal);
-  refs.colL=box(model,'front_column_left',[.12,frontH-.10,.12],[-edgeX,(frontH-.10)/2,PROJECTION-.08],metal);refs.colR=box(model,'front_column_right',[.12,frontH-.10,.12],[edgeX,(frontH-.10)/2,PROJECTION-.08],metal);
-  refs.railL=box(model,'rail_left',[.10,.10,railLen],[-(WIDTH/2-.07),midH-.10,PROJECTION/2],metal,slope);refs.railR=box(model,'rail_right',[.10,.10,railLen],[(WIDTH/2-.07),midH-.10,PROJECTION/2],metal,slope);
+  refs.rear=box(model,'rear_beam',[WIDTH,.18,.14],[0,rearH-.09,.07],metal);
+  refs.front=box(model,'front_gutter',[WIDTH,.20,.16],[0,frontH-.10,PROJECTION-.08],metal);
+  refs.colL=box(model,'front_column_left',[.12,frontH-.10,.12],[-edgeX,(frontH-.10)/2,PROJECTION-.08],metal);
+  refs.colR=box(model,'front_column_right',[.12,frontH-.10,.12],[edgeX,(frontH-.10)/2,PROJECTION-.08],metal);
+  refs.railL=box(model,'rail_left',[.10,.10,railLen],[-(WIDTH/2-.07),midH-.10,PROJECTION/2],metal,slope);
+  refs.railR=box(model,'rail_right',[.10,.10,railLen],[(WIDTH/2-.07),midH-.10,PROJECTION/2],metal,slope);
   const f=Math.max(.04,fabricPct/100),visP=(PROJECTION-.20)*f,visDrop=drop*(visP/PROJECTION),visRail=Math.hypot(visP,visDrop),zMid=.10+visP/2,yMid=rearH-.16-visDrop/2;
   refs.fabric=box(model,'fabric',[WIDTH-.24,.025,Math.max(.10,visRail)],[0,yMid,zMid],fabricMat,slope);
-  refs.fabricProfiles=[];refs.ledStrips=[];const n=6,travel=PROJECTION-.26;
-  for(let i=0;i<n;i++){let z;if(fabricPct<=5)z=.16+i*.035;else z=.16+(travel*(i/(n-1)))*(fabricPct/100);z=Math.min(PROJECTION-.12,z);const y=rearH-.205-drop*(z/PROJECTION);refs.fabricProfiles.push(box(model,'fabric_profile_'+i,[WIDTH-.18,.045,.055],[0,y,z],profileMat,slope));refs.ledStrips.push(box(model,'led_'+i,[WIDTH-.30,.010,.020],[0,y-.031,z+.006],ledMat,slope))}
-  heightInfo.textContent=`H spate ${rearH.toFixed(2)} m · H față ${frontH.toFixed(2)} m`;fabricInfo.textContent=`Stofă ${fabricPct}% · ${refs.fabricProfiles.length} profile · LED ${ledOn?'ON':'OFF'}`;ledToggle.textContent=ledOn?'LED ON':'LED OFF';ledToggle.classList.toggle('primary',ledOn);
+  refs.fabricProfiles=[];refs.ledStrips=[];
+  const n=6,travel=PROJECTION-.26;
+  for(let i=0;i<n;i++){
+    let z;if(fabricPct<=5)z=.16+i*.035;else z=.16+(travel*(i/(n-1)))*(fabricPct/100);
+    z=Math.min(PROJECTION-.12,z);
+    const y=rearH-.205-drop*(z/PROJECTION);
+    refs.fabricProfiles.push(box(model,'fabric_profile_'+i,[WIDTH-.18,.045,.055],[0,y,z],profileMat,slope));
+    refs.ledStrips.push(box(model,'led_'+i,[WIDTH-.30,.010,.020],[0,y-.031,z+.006],ledMat,slope));
+  }
+  heightInfo.textContent=`H spate ${rearH.toFixed(2)} m · H față ${frontH.toFixed(2)} m`;
+  fabricInfo.textContent=`Stofă ${fabricPct}% · ${refs.fabricProfiles.length} profile · LED ${ledOn?'ON':'OFF'}`;
+  ledToggle.textContent=ledOn?'LED ON':'LED OFF';ledToggle.classList.toggle('primary',ledOn);
 }
-function createModel(){model=new THREE.Group();model.name='EVA_3500x2000_P09';model.rotation.order='YXZ';model.visible=false;scene.add(model);buildModelGeometry()}
-function initScene(){scene=new THREE.Scene();camera=new THREE.PerspectiveCamera();renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.xr.enabled=true;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;app.appendChild(renderer.domElement);scene.add(new THREE.HemisphereLight(0xffffff,0x777777,2.2));const dl=new THREE.DirectionalLight(0xffffff,2);dl.position.set(2,5,2);scene.add(dl);reticle=new THREE.Mesh(new THREE.RingGeometry(.075,.12,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide,depthTest:false}));reticle.visible=false;reticle.renderOrder=999;scene.add(reticle);createModel();setStatus('Model pregătit. Verific WebXR…')}
-async function checkXR(){try{if(!navigator.xr){setStatus('navigator.xr indisponibil');return}const ok=await navigator.xr.isSessionSupported('immersive-ar');setStatus(ok?'WebXR gata':'WebXR indisponibil');start.disabled=!ok}catch(e){setStatus('Eroare WebXR: '+(e?.message||e))}}
+function createModel(){model=new THREE.Group();model.name='EVA_3500x2000_P010';model.rotation.order='YXZ';model.visible=false;scene.add(model);buildModelGeometry()}
+function initScene(){
+  scene=new THREE.Scene();camera=new THREE.PerspectiveCamera();
+  renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.xr.enabled=true;
+  renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;app.appendChild(renderer.domElement);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x777777,2.2));const dl=new THREE.DirectionalLight(0xffffff,2);dl.position.set(2,5,2);scene.add(dl);
+  reticle=new THREE.Mesh(new THREE.RingGeometry(.075,.12,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffc35b,side:THREE.DoubleSide,depthTest:false}));
+  reticle.visible=false;reticle.renderOrder=999;scene.add(reticle);createModel();setStatus('Model pregătit. Verific WebXR…')
+}
+async function checkXR(){
+  try{if(!navigator.xr){setStatus('navigator.xr indisponibil');return}
+    const ok=await navigator.xr.isSessionSupported('immersive-ar');setStatus(ok?'WebXR gata':'WebXR indisponibil');start.disabled=!ok
+  }catch(e){setStatus('Eroare WebXR: '+(e?.message||e))}
+}
 
-function syncHardLock(){if(!lockedToWorld||!lockedPose||!model)return;model.position.set(lockedPose.x,floorY,lockedPose.z);model.rotation.set(0,lockedPose.yaw,0);yaw=lockedPose.yaw}
-function unlockWorld(){lockedToWorld=false;lockedPose=null;setLockLabel()}
-function lockCurrentPose(){if(!model?.visible)return;lockedPose={x:model.position.x,z:model.position.z,yaw:normalizeRad(yaw)};lockedToWorld=true;syncHardLock();setLockLabel();setTarget(false)}
-function applyYaw(v){const next=normalizeRad(v);yaw=next;if(lockedToWorld&&lockedPose){lockedPose.yaw=next;syncHardLock()}else if(model){model.rotation.set(0,next,0);model.position.y=floorY}}
-function worldMove(localRight,localForward){if(!model?.visible){setStatus('Plasează mai întâi pergola.');return}const baseYaw=lockedToWorld&&lockedPose?lockedPose.yaw:yaw,rx=Math.cos(baseYaw),rz=-Math.sin(baseYaw),fx=Math.sin(baseYaw),fz=Math.cos(baseYaw),dx=rx*localRight+fx*localForward,dz=rz*localRight+fz*localForward;if(lockedToWorld&&lockedPose){lockedPose.x+=dx;lockedPose.z+=dz;syncHardLock()}else{model.position.x+=dx;model.position.z+=dz;model.position.y=floorY}setStatus('Reglaj fin aplicat.')}
+function matrixFromPoseTransform(t){return new THREE.Matrix4().fromArray(t.matrix)}
+function matrixFromModelPose(pos,yawValue){
+  const q=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yawValue);
+  return new THREE.Matrix4().compose(pos,q,new THREE.Vector3(1,1,1))
+}
+function getCurrentFloorAnchorMatrix(frame){
+  if(!floorAnchor||!refSpace)return null;
+  const p=frame.getPose(floorAnchor.anchorSpace,refSpace);if(!p)return null;
+  floorAnchorMatrix=matrixFromPoseTransform(p.transform);
+  const ap=new THREE.Vector3().setFromMatrixPosition(floorAnchorMatrix);
+  floorPoint.y=ap.y;
+  return floorAnchorMatrix
+}
+function floorYAt(_x,_z){return floorPoint.y}
+function currentStableFloorTarget(){
+  if(currentFloorTarget)return currentFloorTarget.clone();
+  if(lastStableFloorTarget&&(performance.now()-lastFloorTargetTime)<TARGET_GRACE_MS)return lastStableFloorTarget.clone();
+  return null
+}
+function computePlaneTarget(frame){
+  if(!floorCalibrated||!refSpace){currentFloorTarget=null;return}
+  const pose=frame.getViewerPose(refSpace);if(!pose||!pose.views.length){currentFloorTarget=null;return}
+  const t=pose.views[0].transform;
+  const origin=new THREE.Vector3(t.position.x,t.position.y,t.position.z);
+  const q=new THREE.Quaternion(t.orientation.x,t.orientation.y,t.orientation.z,t.orientation.w);
+  const dir=new THREE.Vector3(0,0,-1).applyQuaternion(q).normalize();
+  if(Math.abs(dir.y)<.025){currentFloorTarget=null;setTargetLabel(false);reticle.visible=false;return}
+  const dist=(floorPoint.y-origin.y)/dir.y;
+  if(!Number.isFinite(dist)||dist<.2||dist>MAX_TARGET_DISTANCE){currentFloorTarget=null;setTargetLabel(false);reticle.visible=false;return}
+  const p=origin.clone().addScaledVector(dir,dist);p.y=floorPoint.y;
+  currentFloorTarget=p;lastStableFloorTarget=p.clone();lastFloorTargetTime=performance.now();
+  reticle.position.copy(p);reticle.rotation.set(-Math.PI/2,0,0);reticle.material.color.setHex(0xffffff);reticle.visible=true;setTargetLabel(true,dist)
+}
+function chooseFloorHit(frame){
+  latestFloorCandidate=null;
+  if(!hitTestSource||!refSpace)return;
+  const viewerPose=frame.getViewerPose(refSpace);if(!viewerPose||!viewerPose.views.length)return;
+  const camY=viewerPose.views[0].transform.position.y;
+  const hits=frame.getHitTestResults(hitTestSource);
+  let best=null,bestDrop=-Infinity;
+  for(const hit of hits){
+    const pose=hit.getPose(refSpace);if(!pose)continue;
+    const t=pose.transform,p=new THREE.Vector3(t.position.x,t.position.y,t.position.z),q=new THREE.Quaternion(t.orientation.x,t.orientation.y,t.orientation.z,t.orientation.w);
+    const n=new THREE.Vector3(0,1,0).applyQuaternion(q).normalize();
+    const up=Math.abs(n.y),drop=camY-p.y;
+    if(up<.85||drop<MIN_FLOOR_DROP)continue;
+    if(drop>bestDrop){bestDrop=drop;best={hit,pose,p,n:new THREE.Vector3(0,1,0),drop}}
+  }
+  latestFloorCandidate=best;
+  if(!floorCalibrated){
+    if(best){reticle.position.copy(best.p);reticle.rotation.set(-Math.PI/2,0,0);reticle.material.color.setHex(0x68e58e);reticle.visible=true;setTargetLabel(true,best.drop,true)}
+    else{reticle.visible=false;setTargetLabel(false)}
+  }
+}
+function calibrateFloorFromCurrentFrame(){
+  pendingFloorCalibration=true;closeMore();setStatus('Caut pardoseală reală… ține camera pe podea.');refreshMainAction()
+}
+function commitFloorCalibration(frame){
+  if(!pendingFloorCalibration||!latestFloorCandidate)return;
+  pendingFloorCalibration=false;
+  const c=latestFloorCandidate;
+  floorPoint.copy(c.p);floorNormal.set(0,1,0);floorCalibrated=true;floorAnchorStatus='local';
+  setFloorLabel();setStatus(`Pardoseală calibrată la y=${floorPoint.y.toFixed(2)} m. Atinge podeaua pentru plasare.`);mode='place';wallStage=0;refreshMainAction();
+  if(typeof c.hit.createAnchor==='function'){
+    try{
+      const promise=c.hit.createAnchor();
+      Promise.resolve(promise).then(a=>{
+        floorAnchor=a;floorAnchorStatus='attached';setFloorLabel();setStatus('Pardoseală ancorată de suprafața fizică ✓');
+        if(lockedToWorld&&floorAnchorMatrix)rebaseLockToFloorAnchor();
+      }).catch(()=>{floorAnchorStatus='local';setFloorLabel()});
+    }catch{floorAnchorStatus='local';setFloorLabel()}
+  }
+}
+function deleteFloorAnchor(){if(floorAnchor){try{floorAnchor.delete?.()}catch{}floorAnchor=null}floorAnchorMatrix=null;floorAnchorStatus='none'}
 
-function currentStableFloorTarget(){if(currentFloorTarget)return currentFloorTarget.clone();if(lastStableFloorTarget&&(performance.now()-lastFloorTargetTime)<TARGET_GRACE_MS)return lastStableFloorTarget.clone();return null}
-function updateFloorTarget(frame){if(lockedToWorld){reticle.visible=false;currentFloorTarget=null;setTarget(false);return}if(!floorLocked||!refSpace){currentFloorTarget=null;reticle.visible=false;setTarget(false);return}const pose=frame.getViewerPose(refSpace);if(!pose||!pose.views.length){currentFloorTarget=null;reticle.visible=false;setTarget(false);return}const t=pose.views[0].transform,origin=new THREE.Vector3(t.position.x,t.position.y,t.position.z),q=new THREE.Quaternion(t.orientation.x,t.orientation.y,t.orientation.z,t.orientation.w),dir=new THREE.Vector3(0,0,-1).applyQuaternion(q).normalize();if(dir.y>=-.025){currentFloorTarget=null;reticle.visible=false;setTarget(false);return}const dist=(floorY-origin.y)/dir.y;if(!Number.isFinite(dist)||dist<.2||dist>MAX_TARGET_DISTANCE){currentFloorTarget=null;reticle.visible=false;setTarget(false);return}const p=origin.clone().addScaledVector(dir,dist);p.y=floorY;currentFloorTarget=p;lastStableFloorTarget=p.clone();lastFloorTargetTime=performance.now();reticle.position.copy(p);reticle.visible=true;setTarget(true,dist)}
-function placeAtFloorTarget(){const p=currentStableFloorTarget();if(!model||!p){setStatus('Nu există țintă pe pardoseală.');return}unlockWorld();model.position.copy(p);model.position.y=floorY;model.rotation.set(0,yaw,0);model.visible=true;mode='idle';setStatus('Pergola plasată. Definește peretele sau reglează manual.')}
-function onSelect(){if(performance.now()<suppressSelectUntil)return;if(mode==='place')placeAtFloorTarget()}
+function makeWorldPoseMatrix(){
+  const pos=new THREE.Vector3(model.position.x,floorYAt(model.position.x,model.position.z),model.position.z);
+  return matrixFromModelPose(pos,yaw)
+}
+function rebaseLockToFloorAnchor(){
+  if(!lockedToWorld||!floorAnchorMatrix||!model)return;
+  const world=makeWorldPoseMatrix();
+  modelRelativeToFloor=floorAnchorMatrix.clone().invert().multiply(world);
+}
+function lockCurrentPose(){
+  if(!model?.visible)return;
+  lockedToWorld=true;
+  lockedWorldPose={x:model.position.x,z:model.position.z,yaw:normalizeRad(yaw)};
+  if(floorAnchorMatrix)rebaseLockToFloorAnchor();else modelRelativeToFloor=null;
+  setLockLabel();setTargetLabel(false);mode='locked'
+}
+function unlockWorld(){lockedToWorld=false;lockedWorldPose=null;modelRelativeToFloor=null;setLockLabel()}
+function syncLockedPose(frame){
+  if(!lockedToWorld||!model)return;
+  const am=getCurrentFloorAnchorMatrix(frame);
+  if(am&&modelRelativeToFloor){
+    const world=am.clone().multiply(modelRelativeToFloor),p=new THREE.Vector3(),q=new THREE.Quaternion(),s=new THREE.Vector3();
+    world.decompose(p,q,s);
+    const e=new THREE.Euler().setFromQuaternion(q,'YXZ');
+    model.position.set(p.x,floorPoint.y,p.z);model.rotation.set(0,e.y,0);yaw=normalizeRad(e.y);
+    lockedWorldPose={x:p.x,z:p.z,yaw};
+  }else if(lockedWorldPose){
+    model.position.set(lockedWorldPose.x,floorPoint.y,lockedWorldPose.z);model.rotation.set(0,lockedWorldPose.yaw,0);yaw=lockedWorldPose.yaw;
+  }
+}
+function updateLockAfterManualChange(){
+  if(!lockedToWorld)return;
+  lockedWorldPose={x:model.position.x,z:model.position.z,yaw:normalizeRad(yaw)};
+  if(floorAnchorMatrix)rebaseLockToFloorAnchor()
+}
+function applyYaw(v){
+  const next=normalizeRad(v);yaw=next;
+  if(model){model.rotation.set(0,next,0);model.position.y=floorYAt(model.position.x,model.position.z)}
+  updateLockAfterManualChange()
+}
+function worldMove(localRight,localForward){
+  if(!model?.visible){setStatus('Plasează mai întâi pergola.');return}
+  const baseYaw=yaw,rx=Math.cos(baseYaw),rz=-Math.sin(baseYaw),fx=Math.sin(baseYaw),fz=Math.cos(baseYaw);
+  model.position.x+=rx*localRight+fx*localForward;model.position.z+=rz*localRight+fz*localForward;model.position.y=floorYAt(model.position.x,model.position.z);
+  updateLockAfterManualChange();setStatus('Reglaj fin aplicat.')
+}
 
-function clearWallGeometry(){wallMarkers.forEach(m=>{scene.remove(m);m.traverse?.(c=>{c.geometry?.dispose?.();c.material?.dispose?.()})});wallMarkers=[];if(wallBand){scene.remove(wallBand);wallBand.geometry?.dispose?.();wallBand.material?.dispose?.();wallBand=null}}
-function addWallMarker(p,index){const g=new THREE.Group(),core=new THREE.Mesh(new THREE.SphereGeometry(.09,20,14),new THREE.MeshBasicMaterial({color:index===0?0x42ff91:0xffc447,depthTest:false})),halo=new THREE.Mesh(new THREE.RingGeometry(.12,.17,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide,depthTest:false,transparent:true,opacity:.95}));core.position.y=.09;halo.position.y=.012;g.add(core,halo);g.position.set(p.x,floorY,p.z);g.renderOrder=998;scene.add(g);wallMarkers.push(g)}
-function drawWallBand(){if(wallPoints.length!==2)return;const a=wallPoints[0],b=wallPoints[1],dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz),midX=(a.x+b.x)/2,midZ=(a.z+b.z)/2,angle=Math.atan2(dx,dz);wallBand=new THREE.Mesh(new THREE.BoxGeometry(.045,.012,len),new THREE.MeshBasicMaterial({color:0x42ff91,depthTest:false,transparent:true,opacity:.92}));wallBand.position.set(midX,floorY+.018,midZ);wallBand.rotation.y=angle;wallBand.renderOrder=997;scene.add(wallBand)}
-function beginWallDefinition(){unlockWorld();wallPoints=[];clearWallGeometry();mode='wall';setWallStage(1);wallInfo.textContent='Perete: pregătire P1';closeMore();setStatus('Țintește pardoseala la baza peretelui și setează P1.')}
-function captureWallPoint(index){if(mode!=='wall')return;const p=currentStableFloorTarget();if(!p){setStatus('Ținta pardoselii nu este disponibilă.');return}p.y=floorY;if(index===0){wallPoints=[p];clearWallGeometry();addWallMarker(p,0);setWallStage(2);wallInfo.textContent='P1 setat';setStatus('P1 salvat. Mută ținta lateral ≥30 cm și setează P2.');return}const a=wallPoints[0];if(!a){setWallStage(0);return}const len=Math.hypot(p.x-a.x,p.z-a.z);if(len<.30){setStatus('P2 prea aproape de P1.');return}wallPoints[1]=p;addWallMarker(p,1);drawWallBand();mode='idle';setWallStage(3);wallInfo.textContent=`P1–P2 ✓ ${len.toFixed(2)} m`;setStatus('P1/P2 setate. Apasă Lipește + blochează.')}
-function snapToWall(){if(!model||wallPoints.length!==2){setStatus('Peretele nu este definit complet.');return}const a=wallPoints[0],b=wallPoints[1],dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz);let ux=dx/len,uz=dz/len;const mx=(a.x+b.x)/2,mz=(a.z+b.z)/2,xrCam=renderer.xr.getCamera(camera),camPos=new THREE.Vector3();xrCam.getWorldPosition(camPos);let nx=-uz,nz=ux;if((camPos.x-mx)*nx+(camPos.z-mz)*nz<0){ux=-ux;uz=-uz}yaw=normalizeRad(Math.atan2(-uz,ux));model.position.set(mx,floorY,mz);model.rotation.set(0,yaw,0);model.visible=true;mode='locked';lockCurrentPose();setWallStage(4);wallInfo.textContent='SNAP + HARD LOCK ✓';setStatus('Poziția a fost fixată în local-floor. Mergi în jurul pergolei pentru testul de stabilitate.')}
+function placeAtFloorTarget(){
+  const p=currentStableFloorTarget();if(!floorCalibrated||!p||!model){setStatus('Calibrează solul și țintește pardoseala.');return}
+  unlockWorld();model.position.set(p.x,floorYAt(p.x,p.z),p.z);model.rotation.set(0,yaw,0);model.visible=true;mode='idle';setStatus('Pergola plasată pe pardoseala calibrată.')
+}
+function onSelect(){
+  if(performance.now()<suppressSelectUntil)return;
+  if(mode==='place')placeAtFloorTarget()
+}
 
-function changeHeight(delta){heightOffset=THREE.MathUtils.clamp(heightOffset+delta,-.60,.80);buildModelGeometry();syncHardLock();setStatus(`H față + H spate ${delta>0?'+':'−'}5 cm.`)}
-function setFabric(pct){fabricPct=THREE.MathUtils.clamp(Math.round(pct/5)*5,0,100);fabricRange.value=fabricPct;buildModelGeometry();syncHardLock();setStatus(`Stofă ${fabricPct}%.`)}
-function toggleLed(){ledOn=!ledOn;buildModelGeometry();syncHardLock();setStatus('LED '+(ledOn?'ON':'OFF'))}
-function resetAll(){unlockWorld();clearWallGeometry();closeMore();mode='place';wallPoints=[];setWallStage(0);wallInfo.textContent='Perete: nedefinit';yaw=0;heightOffset=0;fabricPct=100;ledOn=true;fabricRange.value=100;buildModelGeometry();if(model){model.visible=false;model.position.set(0,floorY,0);model.rotation.set(0,0,0)}currentFloorTarget=null;lastStableFloorTarget=null;setTarget(false);setStatus('Reset complet. Țintește pardoseala și atinge ecranul pentru o plasare nouă.')}
-function replaceModel(){unlockWorld();clearWallGeometry();closeMore();mode='place';wallPoints=[];setWallStage(0);wallInfo.textContent='Perete: nedefinit';if(model)model.visible=false;setStatus('Reașezare: țintește pardoseala și atinge ecranul. Setările H/stofă/LED se păstrează.')}
+function clearWallGeometry(){
+  wallMarkers.forEach(m=>{scene.remove(m);m.geometry?.dispose?.();m.material?.dispose?.()});wallMarkers=[];
+  if(wallBand){scene.remove(wallBand);wallBand.geometry?.dispose?.();wallBand.material?.dispose?.();wallBand=null}
+  wallPoints=[];wallPointsLocal=[]
+}
+function anchorLocalPoint(worldPoint){
+  if(!floorAnchorMatrix)return null;
+  return worldPoint.clone().applyMatrix4(floorAnchorMatrix.clone().invert())
+}
+function refreshWallPointsFromAnchor(){
+  if(!floorAnchorMatrix||wallPointsLocal.length!==wallPoints.length)return;
+  for(let i=0;i<wallPoints.length;i++)if(wallPointsLocal[i])wallPoints[i]=wallPointsLocal[i].clone().applyMatrix4(floorAnchorMatrix)
+}
+function updateWallVisuals(){
+  if(wallMarkers[0]&&wallPoints[0]){wallMarkers[0].position.copy(wallPoints[0]);wallMarkers[0].position.y=floorPoint.y+.04}
+  if(wallMarkers[1]&&wallPoints[1]){wallMarkers[1].position.copy(wallPoints[1]);wallMarkers[1].position.y=floorPoint.y+.04}
+  if(wallBand&&wallPoints.length===2){
+    const a=wallPoints[0],b=wallPoints[1],dx=b.x-a.x,dz=b.z-a.z;
+    wallBand.position.set((a.x+b.x)/2,floorPoint.y+.025,(a.z+b.z)/2);wallBand.rotation.y=Math.atan2(dx,dz)
+  }
+}
+function rebuildWallVisuals(){
+  wallMarkers.forEach(m=>scene.remove(m));wallMarkers=[];
+  if(wallBand){scene.remove(wallBand);wallBand.geometry?.dispose?.();wallBand.material?.dispose?.();wallBand=null}
+  if(wallPoints[0]){
+    const m=new THREE.Mesh(new THREE.SphereGeometry(.085,20,14),new THREE.MeshBasicMaterial({color:0x42ff8b,depthTest:false}));m.position.copy(wallPoints[0]);m.position.y=floorPoint.y+.04;m.renderOrder=998;scene.add(m);wallMarkers.push(m)
+  }
+  if(wallPoints[1]){
+    const m=new THREE.Mesh(new THREE.SphereGeometry(.085,20,14),new THREE.MeshBasicMaterial({color:0xffcb4f,depthTest:false}));m.position.copy(wallPoints[1]);m.position.y=floorPoint.y+.04;m.renderOrder=998;scene.add(m);wallMarkers.push(m);
+    const a=wallPoints[0],b=wallPoints[1],dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz),ang=Math.atan2(dx,dz);
+    wallBand=new THREE.Mesh(new THREE.BoxGeometry(.045,.018,len),new THREE.MeshBasicMaterial({color:0x5bff9a,depthTest:false}));
+    wallBand.position.set((a.x+b.x)/2,floorPoint.y+.025,(a.z+b.z)/2);wallBand.rotation.y=ang;wallBand.renderOrder=997;scene.add(wallBand)
+  }
+}
+function beginWallDefinition(){
+  if(!floorCalibrated){calibrateFloorFromCurrentFrame();return}
+  closeMore();unlockWorld();clearWallGeometry();wallStage=1;mode='wall';refreshMainAction();setStatus('Țintește baza peretelui pentru P1.')
+}
+function captureWallPoint(index){
+  const p=currentStableFloorTarget();if(!p){setStatus('Ținta pardoselii nu este disponibilă.');return}
+  p.y=floorPoint.y;
+  if(index===0){
+    wallPoints=[p];wallPointsLocal=[anchorLocalPoint(p)];wallStage=2;rebuildWallVisuals();refreshMainAction();setStatus('P1 salvat. Mută lateral ≥30 cm.')
+  }else{
+    if(!wallPoints[0])return;
+    const len=Math.hypot(p.x-wallPoints[0].x,p.z-wallPoints[0].z);if(len<.30){setStatus('P2 prea aproape de P1.');return}
+    wallPoints[1]=p;wallPointsLocal[1]=anchorLocalPoint(p);wallStage=3;mode='idle';rebuildWallVisuals();refreshMainAction();setStatus('P1/P2 definite. Lipește + blochează.')
+  }
+}
+function snapToWall(){
+  refreshWallPointsFromAnchor();
+  if(!model||wallPoints.length!==2){setStatus('Peretele nu este definit complet.');return}
+  const a=wallPoints[0],b=wallPoints[1],dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz);let ux=dx/len,uz=dz/len;
+  const mx=(a.x+b.x)/2,mz=(a.z+b.z)/2;
+  const vp=renderer.xr.getCamera(camera),camPos=new THREE.Vector3();vp.getWorldPosition(camPos);
+  let nx=-uz,nz=ux;if((camPos.x-mx)*nx+(camPos.z-mz)*nz<0){ux=-ux;uz=-uz}
+  yaw=normalizeRad(Math.atan2(-uz,ux));
+  model.position.set(mx,floorYAt(mx,mz),mz);model.rotation.set(0,yaw,0);model.visible=true;
+  lockCurrentPose();wallStage=4;refreshMainAction();setStatus('Wall Snap aplicat. Model blocat față de pardoseala calibrată.')
+}
+function changeHeight(delta){heightOffset=THREE.MathUtils.clamp(heightOffset+delta,-.60,.80);buildModelGeometry();setStatus(`H față/spate ${delta>0?'+':'−'}5 cm; panta păstrată.`)}
+function setFabric(p){fabricPct=THREE.MathUtils.clamp(Math.round(p/5)*5,0,100);fabricRange.value=fabricPct;buildModelGeometry();setStatus(`Stofă ${fabricPct}%.`)}
+function toggleLed(){ledOn=!ledOn;buildModelGeometry();setStatus('LED '+(ledOn?'ON':'OFF'))}
 
-async function startXR(){start.disabled=true;setStatus('Se solicită sesiunea WebXR…');try{session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['hit-test','local-floor'],optionalFeatures:['dom-overlay'],domOverlay:{root:document.body}});renderer.xr.setReferenceSpaceType('local-floor');await renderer.xr.setSession(session);refSpace=await session.requestReferenceSpace('local-floor');viewerSpace=await session.requestReferenceSpace('viewer');hitTestSource=await session.requestHitTestSource({space:viewerSpace});floorY=0;floorLocked=true;setFloorLabel();setLockLabel();session.addEventListener('select',onSelect);session.addEventListener('end',()=>{unlockWorld();clearWallGeometry();controls.classList.remove('active');start.style.display='inline-block';start.disabled=false;reticle.visible=false;currentFloorTarget=null;lastStableFloorTarget=null;floorLocked=false;setFloorLabel();setTarget(false);setWallStage(0);setStatus('Sesiune WebXR închisă.')});controls.classList.add('active');start.style.display='none';mode=model?.visible?'idle':'place';setWallStage(0);setStatus('WebXR pornit. Înclină camera spre pardoseală și atinge ecranul pentru plasare.');renderer.setAnimationLoop(render)}catch(e){setStatus('WebXR start eșuat: '+(e?.name||'Error')+' — '+(e?.message||e));start.disabled=false}}
-function render(_t,frame){if(frame&&refSpace)updateFloorTarget(frame);if(lockedToWorld)syncHardLock();renderer.render(scene,camera)}
+function fullReset(){
+  unlockWorld();deleteFloorAnchor();floorCalibrated=false;pendingFloorCalibration=false;floorPoint.set(0,0,0);floorNormal.set(0,1,0);
+  currentFloorTarget=null;lastStableFloorTarget=null;latestFloorCandidate=null;clearWallGeometry();wallStage=0;mode='idle';yaw=0;heightOffset=0;fabricPct=100;ledOn=true;fabricRange.value=100;
+  if(model){model.visible=false;model.position.set(0,0,0);model.rotation.set(0,0,0);buildModelGeometry()}
+  reticle.visible=false;setFloorLabel();setTargetLabel(false);setLockLabel();closeMore();refreshMainAction();setStatus('Reset complet. Recalibrează pardoseala.')
+}
 
-start.onclick=startXR;document.getElementById('horizon').onclick=()=>{if(model){model.rotation.x=0;model.rotation.z=0;syncHardLock();setStatus('Orizont aplicat.')}};document.getElementById('flip').onclick=()=>applyYaw(yaw+Math.PI);document.getElementById('replace').onclick=replaceModel;document.getElementById('reset').onclick=resetAll;moreToggle.onclick=toggleMore;document.getElementById('moveLeft').onclick=()=>worldMove(-MOVE_STEP,0);document.getElementById('moveRight').onclick=()=>worldMove(MOVE_STEP,0);document.getElementById('moveForward').onclick=()=>worldMove(0,MOVE_STEP);document.getElementById('moveBack').onclick=()=>worldMove(0,-MOVE_STEP);document.getElementById('fineLeft').onclick=()=>applyYaw(yaw+FINE_ROTATE_STEP);document.getElementById('fineRight').onclick=()=>applyYaw(yaw-FINE_ROTATE_STEP);document.getElementById('coarseLeft').onclick=()=>applyYaw(yaw+THREE.MathUtils.degToRad(15));document.getElementById('coarseRight').onclick=()=>applyYaw(yaw-THREE.MathUtils.degToRad(15));document.getElementById('heightUp').onclick=()=>changeHeight(HEIGHT_STEP);document.getElementById('heightDown').onclick=()=>changeHeight(-HEIGHT_STEP);fabricRange.addEventListener('input',e=>setFabric(Number(e.target.value)));document.getElementById('fabricOpen').onclick=()=>setFabric(100);document.getElementById('fabricClose').onclick=()=>setFabric(0);ledToggle.onclick=toggleLed;wallAction.onclick=()=>{if(wallStage===0||wallStage===4)beginWallDefinition();else if(wallStage===1)captureWallPoint(0);else if(wallStage===2)captureWallPoint(1);else if(wallStage===3)snapToWall()};addEventListener('resize',()=>renderer?.setSize(innerWidth,innerHeight));
+async function startXR(){
+  start.disabled=true;setStatus('Se solicită sesiunea WebXR…');
+  try{
+    session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['hit-test'],optionalFeatures:['dom-overlay','anchors'],domOverlay:{root:document.body}});
+    renderer.xr.setReferenceSpaceType('local');await renderer.xr.setSession(session);
+    refSpace=renderer.xr.getReferenceSpace?.()||await session.requestReferenceSpace('local');
+    viewerSpace=await session.requestReferenceSpace('viewer');
+    try{hitTestSource=await session.requestHitTestSource({space:viewerSpace,entityTypes:['plane']})}
+    catch{hitTestSource=await session.requestHitTestSource({space:viewerSpace})}
+    refSpace.addEventListener?.('reset',()=>{fullReset();setStatus('Tracking-ul XR s-a recentrat. Pardoseala trebuie recalibrată.')});
+    session.addEventListener('select',onSelect);
+    session.addEventListener('end',()=>{fullReset();controls.classList.remove('active');start.style.display='inline-block';start.disabled=false;setStatus('Sesiune WebXR închisă.')});
+    controls.classList.add('active');start.style.display='none';fullReset();setStatus('WebXR pornit. Pas 0: calibrează pardoseala reală.');renderer.setAnimationLoop(render)
+  }catch(e){setStatus('WebXR start eșuat: '+(e?.name||'Error')+' — '+(e?.message||e));start.disabled=false}
+}
+function render(_t,frame){
+  if(frame&&refSpace){
+    getCurrentFloorAnchorMatrix(frame);
+    if(lockedToWorld&&floorAnchorMatrix&&!modelRelativeToFloor)rebaseLockToFloorAnchor();
+    chooseFloorHit(frame);
+    if(pendingFloorCalibration&&latestFloorCandidate)commitFloorCalibration(frame);
+    if(floorCalibrated)computePlaneTarget(frame);
+    refreshWallPointsFromAnchor();
+    if(wallPoints.length)updateWallVisuals();
+    syncLockedPose(frame);
+  }
+  renderer.render(scene,camera)
+}
 
-setStatus('Inițializare P0.9…');initScene();checkXR();
+start.onclick=startXR;
+$('horizon').onclick=()=>{if(model){model.rotation.x=0;model.rotation.z=0;updateLockAfterManualChange();setStatus('Orizont aplicat.')}};
+$('flip').onclick=()=>applyYaw(yaw+Math.PI);
+$('replace').onclick=()=>{if(!floorCalibrated){setStatus('Mai întâi calibrează pardoseala.');return}unlockWorld();mode='place';setStatus('Reașezare: țintește podeaua și atinge ecranul.')}};
+$('reset').onclick=fullReset;
+moreToggle.onclick=toggleMore;
+$('moveLeft').onclick=()=>worldMove(-MOVE_STEP,0);$('moveRight').onclick=()=>worldMove(MOVE_STEP,0);$('moveForward').onclick=()=>worldMove(0,MOVE_STEP);$('moveBack').onclick=()=>worldMove(0,-MOVE_STEP);
+$('fineLeft').onclick=()=>applyYaw(yaw+FINE_ROTATE_STEP);$('fineRight').onclick=()=>applyYaw(yaw-FINE_ROTATE_STEP);$('coarseLeft').onclick=()=>applyYaw(yaw+THREE.MathUtils.degToRad(15));$('coarseRight').onclick=()=>applyYaw(yaw-THREE.MathUtils.degToRad(15));
+$('heightUp').onclick=()=>changeHeight(HEIGHT_STEP);$('heightDown').onclick=()=>changeHeight(-HEIGHT_STEP);
+fabricRange.oninput=e=>setFabric(Number(e.target.value));$('fabricOpen').onclick=()=>setFabric(100);$('fabricClose').onclick=()=>setFabric(0);ledToggle.onclick=toggleLed;
+mainAction.onclick=()=>{
+  if(!floorCalibrated){calibrateFloorFromCurrentFrame();return}
+  if(wallStage===0||wallStage===4){beginWallDefinition();return}
+  if(wallStage===1){captureWallPoint(0);return}
+  if(wallStage===2){captureWallPoint(1);return}
+  if(wallStage===3){snapToWall();return}
+};
+addEventListener('resize',()=>renderer?.setSize(innerWidth,innerHeight));
+
+setStatus('Inițializare P0.10…');initScene();checkXR();setFloorLabel();setLockLabel();refreshMainAction();
 </script>
 </body>
 </html>
