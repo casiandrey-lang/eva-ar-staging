@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>EVA WebXR-only diagnostic</title>
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.3.1/model-viewer.min.js"></script>
+  <style>
+    html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Arial,sans-serif;background:#111;color:#fff}
+    main{height:100%;display:grid;grid-template-rows:auto auto auto 1fr auto}
+    header,footer{padding:10px 14px;background:#171717}
+    header strong{display:block}.muted{font-size:12px;color:#bbb;margin-top:3px}
+    #diag,#status{padding:8px 14px;font-size:12px;line-height:1.35}
+    #diag{background:#202020;color:#ddd}#status{background:#292929;color:#fff}
+    .ok{color:#8ee59b}.bad{color:#ff9d9d}.warn{color:#ffd38a}
+    .viewer-wrap{position:relative;min-height:0;background:#eee;overflow:hidden}
+    model-viewer{width:100%;height:100%;background:#eee;--poster-color:#eee}
+    .ar-button{border:0;border-radius:10px;padding:12px 18px;font-weight:700;background:#111;color:#fff;box-shadow:0 1px 6px #0005}
+    .toolbar{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:10;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:min(95%,760px);padding:8px;border-radius:12px;background:#111e}
+    .toolbar button{border:1px solid #ffffff33;border-radius:8px;padding:10px;background:#222;color:#fff;font:600 12px/1 system-ui}
+    .toolbar .primary{background:#fff;color:#111}
+    footer{font-size:11px;color:#bbb}
+  </style>
+</head>
+<body>
+<main>
+<header>
+  <strong>EVA — test WebXR-only</strong>
+  <div class="muted">Fără Scene Viewer fallback. Acest test verifică dacă browserul poate controla AR direct.</div>
+</header>
+<div id="diag">Se verifică WebXR…</div>
+<div id="status">Se încarcă modelul…</div>
+<div class="viewer-wrap">
+  <model-viewer
+    id="eva"
+    src="./models/eva-p0-8500w-5000p.glb"
+    alt="Pergola EVA P0"
+    camera-controls
+    touch-action="pan-y"
+    shadow-intensity="1"
+    exposure="1"
+    ar
+    ar-modes="webxr"
+    ar-scale="fixed"
+    ar-placement="floor">
+    <button slot="ar-button" class="ar-button">Pornește WebXR</button>
+  </model-viewer>
+  <div class="toolbar">
+    <button id="horizon" class="primary">Orizont</button>
+    <button id="flip">Față / Spate</button>
+    <button id="left">↶ 15°</button>
+    <button id="right">15° ↷</button>
+    <button id="wall">Perete 90°</button>
+  </div>
+</div>
+<footer>Dacă WebXR immersive-ar nu este disponibil, acest test trebuie să refuze AR în loc să deschidă Scene Viewer.</footer>
+</main>
+<script type="module">
+  const diag = document.getElementById('diag');
+  const status = document.getElementById('status');
+  const viewer = document.getElementById('eva');
+  let yaw = 0;
+  const norm = v => ((v % 360) + 360) % 360;
+  const apply = v => { yaw = norm(v); viewer.orientation = `0deg ${yaw}deg 0deg`; status.textContent = `Orientare pregătită: ${yaw}°.`; };
+
+  async function checkXR(){
+    const lines = [];
+    lines.push(`navigator.xr: ${navigator.xr ? 'DA' : 'NU'}`);
+    if (!navigator.xr) {
+      diag.innerHTML = `<span class="bad">WebXR API indisponibil în acest browser.</span><br>${lines.join('<br>')}`;
+      return;
+    }
+    try {
+      const supported = await navigator.xr.isSessionSupported('immersive-ar');
+      lines.push(`immersive-ar: ${supported ? 'DA' : 'NU'}`);
+      diag.innerHTML = supported
+        ? `<span class="ok">WebXR immersive-ar disponibil.</span><br>${lines.join('<br>')}`
+        : `<span class="bad">WebXR există, dar immersive-ar NU este disponibil pe acest browser/dispozitiv.</span><br>${lines.join('<br>')}`;
+    } catch (e) {
+      diag.innerHTML = `<span class="bad">Eroare la verificarea immersive-ar: ${e.name || e}</span><br>${lines.join('<br>')}`;
+    }
+  }
+  checkXR();
+
+  document.getElementById('horizon').addEventListener('click', () => apply(0));
+  document.getElementById('flip').addEventListener('click', () => apply(yaw + 180));
+  document.getElementById('left').addEventListener('click', () => apply(yaw - 15));
+  document.getElementById('right').addEventListener('click', () => apply(yaw + 15));
+  document.getElementById('wall').addEventListener('click', () => apply(90));
+
+  viewer.addEventListener('load', () => { status.textContent = 'Model gata. Dacă diagnosticul este verde, apasă „Pornește WebXR”.'; });
+  viewer.addEventListener('error', e => { status.textContent = `Eroare model: ${e.detail?.type || 'necunoscută'}`; });
+  viewer.addEventListener('ar-status', e => {
+    const s = e.detail?.status || 'necunoscut';
+    status.textContent = `AR status: ${s}`;
+  });
+</script>
+</body>
+</html>
