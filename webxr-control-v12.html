@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ro">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>EVA AR 1:1</title>
+<style>html,body{margin:0;height:100%;background:#111;color:#fff;font-family:system-ui,Segoe UI,Arial,sans-serif}.load{height:100%;display:grid;place-items:center;padding:24px;text-align:center}.card{max-width:520px}.card strong{display:block;font-size:20px;margin-bottom:8px}.card span{color:#bbb;font-size:13px;line-height:1.5}</style></head>
+<body><div class="load"><div class="card"><strong>EVA AR 1:1</strong><span id="msg">Se pregătește configurația din Tab C…</span></div></div>
+<script>
+(async()=>{
+  const msg=document.getElementById('msg'),q=new URLSearchParams(location.search);
+  const mm=(name,fallback,min,max)=>{const n=Number(q.get(name));return Number.isFinite(n)?Math.min(max,Math.max(min,n)):fallback};
+  const safeHex=(name,fallback)=>{const v=(q.get(name)||'').trim().replace(/^#/,'');return /^[0-9a-f]{6}$/i.test(v)?v.toLowerCase():fallback};
+  const w=mm('w',3500,500,100000),p=mm('p',2000,500,20000),hf=mm('hf',2600,1000,10000),hr=mm('hr',2850,1000,10000);
+  const W=w/1000,P=p/1000,HF=hf/1000,HR=hr/1000,pc=safeHex('pc','c6c9cc'),fc=safeHex('fc','ffffff');
+  const profileType=q.get('pt')==='hddlux'?'hddlux':'standard',fabricPct=q.get('fs')==='retracted'?0:100,ledOn=profileType==='hddlux'&&q.get('led')!=='0';
+  const title=`EVA ${(w/1000).toFixed(2).replace('.',',')} × ${(p/1000).toFixed(2).replace('.',',')} · AR 1:1`;
+  try{
+    let src=await (await fetch('./webxr-control-v11.html',{cache:'no-store'})).text();
+    if(!src.includes('EVA P0.11'))throw new Error('Baza P0.11 nu a fost găsită.');
+    src=src.replace('<title>EVA P0.11 — anchored floor Y calibration</title>',`<title>${title}</title>`);
+    src=src.replace('<div id="topLine"><strong>EVA 3,5 × 2,0 · P0.11</strong>',`<div id="topLine"><strong>${title}</strong>`);
+    src=src.replace('let rearH=2.85,frontH=2.60,heightOffset=0,fabricPct=100,ledOn=true,depthSeen=false,sessionStartTime=0;',`let rearH=${HR},frontH=${HF},heightOffset=0,fabricPct=${fabricPct},ledOn=${ledOn},depthSeen=false,sessionStartTime=0;`);
+    src=src.replace('const WIDTH=3.5,PROJECTION=2.0,BASE_REAR_H=2.85,BASE_FRONT_H=2.60,MOVE_STEP=.05,GROUND_STEP=.01,HEIGHT_STEP=.05,FINE_ROTATE_STEP=THREE.MathUtils.degToRad(5),TARGET_GRACE_MS=1400,MAX_TARGET_DISTANCE=15;',`const WIDTH=${W},PROJECTION=${P},BASE_REAR_H=${HR},BASE_FRONT_H=${HF},PROFILE_TYPE='${profileType}',MOVE_STEP=.05,GROUND_STEP=.01,HEIGHT_STEP=.05,FINE_ROTATE_STEP=THREE.MathUtils.degToRad(5),TARGET_GRACE_MS=1400,MAX_TARGET_DISTANCE=20;`);
+    src=src.replaceAll('color:0xc6c9cc',`color:0x${pc}`).replaceAll('color:0xbfc3c7',`color:0x${pc}`).replace('color:0xffffff,roughness:.82',`color:0x${fc},roughness:.82`);
+    src=src.replace(/refs\.ledStrips\.push\(box\(model,'led_'\+i,/g,"if(PROFILE_TYPE==='hddlux')refs.ledStrips.push(box(model,'led_'+i,");
+    src=src.replace("function toggleLed(){ledOn=!ledOn;","function toggleLed(){if(PROFILE_TYPE!=='hddlux')return;ledOn=!ledOn;");
+    src=src.replace('fabricPct=100;ledOn=true;groundOffset=0;',`fabricPct=${fabricPct};ledOn=${ledOn};groundOffset=0;`).replace('fabricRange.value=100;','fabricRange.value=fabricPct;');
+    src=src.replace('const refs={};',`const refs={};fabricRange.value=String(fabricPct);if(PROFILE_TYPE!=='hddlux')ledToggle.hidden=true;`);
+    src=src.replace("setStatus('Model 3.50 × 2.00 m verificat. WebXR…')",`setStatus('Configurație ${W.toFixed(2)} × ${P.toFixed(2)} m · WebXR…')`);
+    src=src.replace("setStatus('Inițializare P0.11…')","setStatus('Inițializare AR din Tab C…')");
+    document.open();document.write(src);document.close();
+  }catch(e){msg.textContent='AR nu a putut fi pregătit: '+(e?.message||e);}
+})();
+</script></body></html>
