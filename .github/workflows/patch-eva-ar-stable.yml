@@ -1,0 +1,57 @@
+name: Patch stable EVA AR geometry
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-eva-ar-stable.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Patch webxr-control-v11
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('webxr-control-v11.html')
+          s=p.read_text(encoding='utf-8')
+
+          const_line="const WIDTH=3.5,PROJECTION=2.0,BASE_REAR_H=2.85,BASE_FRONT_H=2.60,MOVE_STEP=.05,GROUND_STEP=.01,HEIGHT_STEP=.05,FINE_ROTATE_STEP=THREE.MathUtils.degToRad(5),TARGET_GRACE_MS=1400,MAX_TARGET_DISTANCE=15;"
+          insert="""const WIDTH=3.5,PROJECTION=2.0,BASE_REAR_H=2.85,BASE_FRONT_H=2.60,MOVE_STEP=.05,GROUND_STEP=.01,HEIGHT_STEP=.05,FINE_ROTATE_STEP=THREE.MathUtils.degToRad(5),TARGET_GRACE_MS=1400,MAX_TARGET_DISTANCE=15;
+          const AR_QUERY=new URLSearchParams(location.search);
+          const AR_FRONT_POST_XS=(AR_QUERY.get('pa')||'').split(',').map(Number).filter(v=>Number.isFinite(v)&&v>=0&&v<=WIDTH*1000).map(mm=>mm/1000-WIDTH/2);
+          const AR_SIDE_RAFTER=['left','right','both'].includes(AR_QUERY.get('sr'))?AR_QUERY.get('sr'):'none';"""
+          if 'const AR_QUERY=new URLSearchParams(location.search);' not in s:
+              if const_line not in s: raise SystemExit('AR constant anchor missing')
+              s=s.replace(const_line,insert,1)
+
+          old="refs.colL=box(model,'front_column_left',[.12,frontH-.10,.12],[-edgeX,(frontH-.10)/2,PROJECTION-.08],metal);refs.colR=box(model,'front_column_right',[.12,frontH-.10,.12],[edgeX,(frontH-.10)/2,PROJECTION-.08],metal);refs.railL=box(model,'rail_left',[.10,.10,railLen],[-(WIDTH/2-.07),midH-.10,PROJECTION/2],metal,slope);refs.railR=box(model,'rail_right',[.10,.10,railLen],[(WIDTH/2-.07),midH-.10,PROJECTION/2],metal,slope);"
+          new="""const postXs=AR_FRONT_POST_XS.length>=2?AR_FRONT_POST_XS:[-edgeX,edgeX];refs.frontColumns=postXs.map((x,i)=>box(model,'front_column_'+(i+1),[.095,frontH-.10,.080],[x,(frontH-.10)/2,PROJECTION-.06],metal));refs.colL=refs.frontColumns[0];refs.colR=refs.frontColumns.at(-1);refs.railL=box(model,'rail_left',[.10,.10,railLen],[-(WIDTH/2-.07),midH-.10,PROJECTION/2],metal,slope);refs.railR=box(model,'rail_right',[.10,.10,railLen],[(WIDTH/2-.07),midH-.10,PROJECTION/2],metal,slope);const sideSpan=Math.max(.20,PROJECTION-.13),sideZ=.065+sideSpan/2,sideY=frontH+.0375;const addSideRafter=(side,x)=>{refs['sideRafter'+side]=box(model,'side_rafter_'+side,[.080,.075,sideSpan],[x,sideY,sideZ],metal);if(PROJECTION>4.5)refs['sideRafterPost'+side]=box(model,'side_rafter_support_'+side,[.095,frontH-.10,.080],[x,(frontH-.10)/2,sideZ],metal)};if(AR_SIDE_RAFTER==='left'||AR_SIDE_RAFTER==='both')addSideRafter('L',postXs[0]);if(AR_SIDE_RAFTER==='right'||AR_SIDE_RAFTER==='both')addSideRafter('R',postXs.at(-1));"""
+          if "refs.frontColumns=postXs.map" not in s:
+              if old not in s: raise SystemExit('AR geometry anchor missing')
+              s=s.replace(old,new,1)
+
+          p.write_text(s,encoding='utf-8')
+      - name: Verify patch
+        run: |
+          grep -q "AR_FRONT_POST_XS" webxr-control-v11.html
+          grep -q "side_rafter_support_" webxr-control-v11.html
+          grep -q "frontColumns=postXs.map" webxr-control-v11.html
+      - name: Commit stable AR patch
+        run: |
+          git config user.name "Gardecor EVA automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add webxr-control-v11.html
+          if git diff --cached --quiet; then
+            echo "No AR changes needed"
+          else
+            git commit -m "Fix stable EVA AR posts and side rafters"
+            git push origin HEAD:main
+          fi
